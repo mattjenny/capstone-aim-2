@@ -26,6 +26,17 @@ string NavarroSeq::compress(string s)
 	vector<vector<unsigned int> > combinations = get_all_combinations(unique_chars.size(), u);
 	printf ("Vector size is %u\n", (unsigned int) combinations.size());
 
+	unsigned int myindex, count = 0;
+	for(vector<vector<unsigned int> >::iterator it = combinations.begin(); it != combinations.end(); ++it) {
+		printf ("%u: (", myindex);
+		for (count=0; count<it->size(); count++) {
+			printf("%u",it->at(count));
+			if (count != it->size() - 1) printf(",");
+		}
+		printf(")\n");
+		myindex++;
+	}
+
 	// get a chunk of u characters
 	// make a vector of length r containing numbers of each character
 
@@ -71,6 +82,12 @@ vector<vector<unsigned int> > NavarroSeq::get_all_combinations(size_t r, size_t 
 		*/
 		vector<unsigned int> values (r,0);
 		values.at(i)++; // Set initial count to current character
+		printf("Calling enumerate on (");
+		for (int count=0; count<values.size(); count++) {
+			printf("%u",values.at(count));
+			if (count != values.size() - 1) printf(",");
+		}
+		printf("): min = %u, r = %u, u = %u\n", i, (unsigned int)r, (unsigned int)u-1);
 		enumerate(values, combinations, i, r, u-1); // add all enumerations with this prefix
 	}
 	return combinations;
@@ -81,6 +98,12 @@ void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned 
 	if (u <= 0) //We already have a sequence of length u
 	{
 		combos.push_back(values); // Add it to the list
+		printf("pushing back: (");
+		for (int count=0; count<values.size(); count++) {
+			printf("%u",values.at(count));
+			if (count != values.size() - 1) printf(",");
+		}
+		printf(")\n");
 		return;
 	}
 	else
@@ -88,8 +111,15 @@ void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned 
 		unsigned int i;
 		for (i = min; i<r; i++) // iterate through all possible characters >= prefix
 		{
-			values.at(i)++;
-			enumerate(values, combos, i, r, u-1);
+			vector<unsigned int> values_copy (values);
+			values_copy.at(i)++;
+			printf("Calling enumerate recursively on (");
+			for (int count=0; count<values.size(); count++) {
+				printf("%u",values_copy.at(count));
+				if (count != values_copy.size() - 1) printf(",");
+			}
+			printf("): min = %u, r = %u, u = %u\n", i, (unsigned int)r, (unsigned int)u-1);
+			enumerate(values_copy, combos, i, r, u-1);
 		}
 	}
 }
