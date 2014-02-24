@@ -4,8 +4,68 @@
 #include <unordered_set>
 #include <stdio.h>
 #include <vector>
+#include <list>
 
 using namespace std;
+
+size_t nseq_n, nseq_r, nseq_u;
+vector<char> nseq_alphabet;
+//vector<E_table*> etable_ptrs;
+
+NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet) 
+{
+	nseq_n = n;
+	nseq_r = r;
+	nseq_u = u;
+	for (list<char>::iterator it = alphabet.begin(); it != alphabet.end(); ++it) {
+		nseq_alphabet.push_back(*it);
+	}
+	//etable_ptrs = table_ptrs;
+}
+
+void NavarroSeq::get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table)
+{
+	unsigned int i,j,combination_sum = 0;
+	for (i=0; i<combination.size(); i++) {
+		combination_sum += combination.at(i);
+	}
+	if (combination_sum == 0) {
+		G_entry* entry = new G_entry(prefix, ranks);
+		printf("Adding new prefix for %s\n", prefix.c_str());
+		table->add_entry(entry);
+	}
+	
+	for (i=0; i<combination.size(); i++) {
+		if(combination.at(i) == 0) continue;
+		string next_prefix = prefix + nseq_alphabet.at(i);
+		vector<unsigned int> remaining_combo (combination);
+		remaining_combo.at(i)--;
+		for (j=i*nseq_u + prefix.length(); j<(i+1)*nseq_u; j++) {
+			ranks.at(j)++;
+		}
+		get_etable_rows(next_prefix, ranks, remaining_combo, table);
+	}
+}
+
+E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
+{
+	printf("New E Table!\n");
+	E_table* table = new E_table();
+	unsigned int i,j;
+	for (i=0; i<combination.size(); i++) {
+		if(combination.at(i) == 0) continue;
+		string prefix = "";
+		prefix += nseq_alphabet.at(i);
+		vector<char> ranks (nseq_r*nseq_u, 0);
+		vector<unsigned int> remaining_combo (combination);
+		remaining_combo.at(i)--;
+		for (j=i*nseq_u; j<(i+1)*nseq_u; j++) {
+			ranks.at(j)++;
+		}
+		get_etable_rows(prefix, ranks, remaining_combo, table);
+	}
+	return table;
+}
 
 string NavarroSeq::compress(string s)
 {
@@ -18,7 +78,16 @@ string NavarroSeq::compress(string s)
 	}
 	r = unique_chars.size();
 
+	list<char> alphabet;
+	for(unordered_set<char>::iterator set_it = unique_chars.begin(); set_it != unique_chars.end(); ++set_it) {
+		alphabet.push_back(*set_it);
+	}
+	alphabet.sort();
+
 	size_t u = floor(0.5*log((double) n)/log((double) r));
+
+	NavarroSeq* nseq = new NavarroSeq(n, r, u, alphabet);
+
 	printf("n = %i; r = %i; u = %i\n", (int)n, (int)r, (int)u);
 
 	//example enumeration (while it's still fresh on my mind) :
@@ -36,6 +105,31 @@ string NavarroSeq::compress(string s)
 		printf(")\n");
 		myindex++;
 	}
+
+	//Create E tables:
+	vector<E_table*> E_table_ptrs;
+	for (i=0; i<combinations.size(); i++) {
+		// Create E table for R[i]
+		E_table* etable = nseq->get_etable(combinations.at(i));
+		E_table_ptrs.push_back(etable);
+		
+		printf("\nE Table for i = %u:\n", (unsigned int) i);
+		printf("------------------\n");
+		for (unsigned int j=0; j<etable->entries.size(); j++) {
+			G_entry* entry = etable->entries.at(j);
+			printf("%u: %s\n", j, entry->sequence.c_str());
+			for(unsigned int k=0; k<r; k++) {
+				for(unsigned int l=0; l<u; l++) {
+					printf("  %i", entry->ranks.at(k*u+l));
+				}
+				printf("\n");
+			}
+		}
+
+	}
+
+	// For each R
+	// For each I
 
 	// get a chunk of u characters
 	// make a vector of length r containing numbers of each character
