@@ -6,12 +6,15 @@
 #include <unordered_map>
 #include "ETable.h"
 #include <list>
+#include <limits>
+#include <iostream>
 
 using namespace std;
 
 class NavarroSeq
 {
 public:
+	static string toBinStr(unsigned int val);
 	static string compress(string s);
 	static string decompress(string s);
 	static char access(string s, int index);

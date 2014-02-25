@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <vector>
 #include <list>
+#include <limits>
+#include <iostream>
 
 using namespace std;
 
@@ -20,6 +22,29 @@ NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet)
 	for (list<char>::iterator it = alphabet.begin(); it != alphabet.end(); ++it) {
 		nseq_alphabet.push_back(*it);
 	}
+}
+
+string NavarroSeq::toBinStr(unsigned int val)
+{
+  string binStr;
+  unsigned int mask = 1 << (sizeof(int) * 8 - 1);
+
+   for(int i = 0; i < sizeof(int) * 8; i++)
+   {
+      if( (val & mask) == 0 )
+         binStr += '0' ;
+      else
+         binStr += '1' ;
+
+      mask  >>= 1;
+   }
+
+   std::size_t pos =  binStr.find_first_not_of("0");
+   if(pos > 0)
+     binStr.erase(0,pos); 
+
+   //cout << val << " " << binStr << endl;
+   return binStr;
 }
 
 string NavarroSeq::compress(string s)
@@ -185,6 +210,54 @@ string NavarroSeq::compress(string s)
 	printf("\n");
 	// END DEBUGGING
 
+	printf("Bit sequences:\n");
+	
+	printf("E table:\n-----------\n");
+		for (i=0; i<combinations.size(); i++) {
+		E_table* etable = E_table_ptrs.at(i);
+		
+		for (unsigned int j=0; j<etable->entries.size(); j++) {
+			G_entry* entry = etable->entries.at(j);
+			cout << j;
+			for(unsigned int k=0; k<r; k++) {
+				for(unsigned int l=0; l<u; l++) {
+				  cout << entry->ranks.at(k*u+l);
+				}
+				printf("\n");
+			}
+		}
+	}
+		printf("\n");
+	printf("I Vals:\n-----------\n");
+	for (i=0; i<i_vals.size(); i++) {
+	  cout << toBinStr(i_vals.at(i));
+		for (j=0; j<r; j++) {
+		  cout << toBinStr(combinations.at(i_vals.at(i)).at(j));
+		}
+	}
+	printf("\n");
+	printf("R Vals:\n-----------\n");
+	for (i=0; i<r_vals.size(); i++) {
+	  cout << toBinStr(r_vals.at(i));
+		for (j=0; j<r; j++) {
+		  cout << toBinStr(combinations.at(r_vals.at(i)).at(j));
+		}
+	}
+	printf("\n");
+	printf("L partial sums:\n-------------\n");
+	for (i=0; i<l_partial_sums.size(); i++) {
+	  cout << toBinStr(l_partial_sums.at(i));
+	}
+
+	printf("\n");
+	printf("N partial sums:\n-------------\n");
+	for (i=0; i<num_blocks; i++) {
+		for (j=0; j<r; j++) {
+		  cout << toBinStr(n_partial_sums.at(i*r+j));
+		}
+	}
+	printf("\n");
+	
 	return "Hello World!"; //Replace "Hello World" with compressed string here
 }
 
@@ -291,5 +364,6 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 int main() {
 	// test sequence
 	NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
+
 	return 0;
 }
