@@ -16,8 +16,8 @@ class NavarroSeq
 public:
 	static string toBinStr(unsigned int val);
 	static string compress(string s);
-	static string decompress(string s);
-	static char access(string s, int index);
+	static string decompress(vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr);
+	static char access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, int index);
 	static unsigned int rank(string s, char c, int index);
 	static unsigned int select(string s, char c, int index);
 

@@ -7,6 +7,7 @@
 #include <list>
 #include <limits>
 #include <iostream>
+#include <sstream>
 
 using namespace std;
 
@@ -154,7 +155,8 @@ string NavarroSeq::compress(string s)
 		}
 		block_count++;
 	}
-
+	string rmdr = s.substr(i);
+/*
 	// DEBUG
 	printf("n = %i; r = %i; u = %i\n", (int)n, (int)r, (int)u);
 	printf ("Vector size is %u\n", (unsigned int) combinations.size());
@@ -209,7 +211,7 @@ string NavarroSeq::compress(string s)
 	}
 	printf("\n");
 	// END DEBUGGING
-
+*/
 	printf("Bit sequences:\n");
 	
 	printf("E table:\n-----------\n");
@@ -257,18 +259,43 @@ string NavarroSeq::compress(string s)
 		}
 	}
 	printf("\n");
-	
+
+	decompress(E_table_ptrs, r_vals, i_vals, l_partial_sums, n_partial_sums, rmdr);
+	char acc = access(u, E_table_ptrs, r_vals, i_vals, l_partial_sums, n_partial_sums,rmdr, 31);
+	cout << "31st index = " << acc << endl;
+
 	return "Hello World!"; //Replace "Hello World" with compressed string here
 }
 
-string NavarroSeq::decompress(string s)
+string NavarroSeq::decompress(vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr)
 {
+	// For now, just assume we already have these to work with.
+	//vector<E_table*> E_table_ptrs;
+	//vector<unsigned int> r_vals; //Note: using unsigned int wastes space!
+	//vector<unsigned int> i_vals; //Note: using unsigned int wastes space!
+	//vector<unsigned int> l_partial_sums;
+	//vector<unsigned int> n_partial_sums; // 2-D: blocks and chars
+
+	string s = "";
+
+	for (unsigned int i=0; i<r_vals.size(); i++) {
+		E_table* table = E_table_ptrs.at(r_vals.at(i));
+		G_entry* entry = table->entries.at(i_vals.at(i));
+		s += entry->sequence;
+	}
+
+	cout << "DECOMPRESSED STRING = " << s << rmdr << endl;
 	return "Hello again, world!";
 }
 
-char NavarroSeq::access(string s, int index)
+char NavarroSeq::access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, int index)
 {
-	return 4;
+	unsigned int block = floor(index/u);
+	unsigned int l = index - block*u;
+	E_table* table = E_table_ptrs.at(r_vals.at(block));
+	G_entry* entry = table->entries.at(i_vals.at(block));
+	char retval = entry->sequence.at(l);
+	return retval;
 }
 
 unsigned int NavarroSeq::rank(string s, char c, int index)
