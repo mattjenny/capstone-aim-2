@@ -335,6 +335,42 @@ char NavarroSeq::access(string fname, int index)
 
 unsigned int NavarroSeq::rank(string fname, char c, int index)
 {
+
+	std::ifstream ifs (fname, std::ifstream::in);
+
+	unsigned int char_index_in_alphabet = 1; // hard coded for now
+
+	unsigned int i,j,k;
+	unsigned int n = get_int(ifs);
+	unsigned int r = get_int(ifs);
+	unsigned int u = get_int(ifs);
+	unsigned int num_blocks = get_int(ifs);
+	unsigned int num_combos = get_int(ifs);
+
+	unsigned int block = floor(index/u);
+	unsigned int l = index - block*u;
+
+	ifs.seekg((5 + block) * 4);
+	unsigned int r_val = get_int(ifs);
+
+	ifs.seekg((5 + num_blocks + block) * 4);
+	unsigned int i_val = get_int(ifs);
+
+	ifs.seekg((7 + 3*num_blocks + r*block + char_index_in_alphabet) * 4);
+	unsigned int n_partial_sum = get_int(ifs);
+
+	ifs.seekg((7+num_blocks*(3+r)+r + r_val)*4);
+	unsigned int E_depth = get_int(ifs);
+
+	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + u + u*char_index_in_alphabet + l);
+	char block_rank = ifs.get();
+
+	unsigned int rank = n_partial_sum + block_rank;
+
+	cout << "RANK = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
+
+	return rank;
+
 	/*unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
 	E_table* table = E_table_ptrs.at(r_vals.at(block));
@@ -343,7 +379,6 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 	unsigned int rank = n_partial_sums.at(r*block + char_index_in_alphabet) + entry->ranks.at(u*char_index_in_alphabet + l);
 	return rank;
 	*/
-	return 0;
 }
 
 unsigned int NavarroSeq::select(string fname, char c, int index)
@@ -436,7 +471,8 @@ int main() {
 	//NavarroSeq::compress("testin.txt", "testout.txt");
 	//NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
 	//NavarroSeq::decompress("testout.txt");
-	NavarroSeq::access("testout.txt",31);
+	//cout << NavarroSeq::access("testout.txt",31) << endl;
+	NavarroSeq::rank("testout.txt",0x62,31);
 
 	return 0;
 }
