@@ -6,6 +6,7 @@
 #include <vector>
 #include <list>
 #include <limits>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -13,6 +14,33 @@ using namespace std;
 
 size_t nseq_n, nseq_r, nseq_u;
 vector<char> nseq_alphabet;
+
+union {
+	unsigned int integer;
+	char byte[4];
+} four_byte_union;
+
+void print_int(std::ofstream & ofs, unsigned int integer) {
+	four_byte_union.integer = integer;
+	ofs.put(four_byte_union.byte[0]);
+	ofs.put(four_byte_union.byte[1]);
+	ofs.put(four_byte_union.byte[2]);
+	ofs.put(four_byte_union.byte[3]);
+}
+
+unsigned int get_int(std::ifstream & ifs) {
+	char bytes[4];
+	bytes[0] = ifs.get();
+	bytes[1] = ifs.get();
+	bytes[2] = ifs.get();
+	bytes[3] = ifs.get();
+	four_byte_union.byte[0] = bytes[0];
+	four_byte_union.byte[1] = bytes[1];
+	four_byte_union.byte[2] = bytes[2];
+	four_byte_union.byte[3] = bytes[3];
+
+	return four_byte_union.integer;
+}
 
 // Private constructor: instances used internally only
 NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet) 
@@ -25,30 +53,7 @@ NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet)
 	}
 }
 
-string NavarroSeq::toBinStr(unsigned int val)
-{
-  string binStr;
-  unsigned int mask = 1 << (sizeof(int) * 8 - 1);
-
-   for(int i = 0; i < sizeof(int) * 8; i++)
-   {
-      if( (val & mask) == 0 )
-         binStr += '0' ;
-      else
-         binStr += '1' ;
-
-      mask  >>= 1;
-   }
-
-   std::size_t pos =  binStr.find_first_not_of("0");
-   if(pos > 0)
-     binStr.erase(0,pos); 
-
-   //cout << val << " " << binStr << endl;
-   return binStr;
-}
-
-string NavarroSeq::compress(string s)
+void NavarroSeq::compress(string in_fname, string out_fname)
 {
 	/*
 	* n is the length of the full sequence s
@@ -58,13 +63,20 @@ string NavarroSeq::compress(string s)
 	* i,j,k are counters used throughout this method
 	*/
 	size_t n,r,u,num_blocks,i,j,k;
-	n = s.size();
+
+	std::ifstream ifs (in_fname);
+
+	// Get file size:
+	ifs.seekg(0, ifs.end);
+	n = ifs.tellg();
+	ifs.seekg(0, ifs.beg);
 
 	// Figure out the alphabet that this sequence uses
 	unordered_set<char> unique_chars;
 	for (i=0; i<n; i++) {
-		unique_chars.insert(s.at(i));
+		unique_chars.insert(ifs.get());
 	}
+	ifs.seekg(0, ifs.beg);
 	r = unique_chars.size();
 
 	// Sort the alphabet
@@ -76,7 +88,7 @@ string NavarroSeq::compress(string s)
 
 	// Calculate block length u and number of blocks
 	u = floor(0.5*log((double) n)/log((double) r));
-	num_blocks = ceil((n+0.0)/u);
+	num_blocks = floor((n+0.0)/u);
 
 	// Create private instance of NavarroSeq
 	NavarroSeq* nseq = new NavarroSeq(n, r, u, alphabet);
@@ -98,19 +110,20 @@ string NavarroSeq::compress(string s)
 	* l_partial_sums: the sum of I encoding lengths up to block i
 	* n_partial_sums: the sum of character counts for each character up to block i
 	*/
-	vector<unsigned int> r_vals; //Note: using unsigned int wastes space!
-	vector<unsigned int> i_vals; //Note: using unsigned int wastes space!
-	vector<unsigned int> l_partial_sums;
+	vector<unsigned int> r_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	vector<unsigned int> i_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	vector<unsigned int> l_partial_sums (num_blocks+1, 0); //NOT exactly the definiteion from Navarro; num G entries
 	vector<unsigned int> n_partial_sums ((num_blocks+1)*r, 0); // 2-D: blocks and chars
 
 	l_partial_sums.push_back(0);
 
-	string current_block;
 	unsigned int curr_r_index, curr_i_index, curr_l;
-	unsigned int block_count = 0;
-	for (i=0; i<=n-u; i += u) { //Iterate over every full block
-		if (i+u > n) current_block = s.substr(i);
-		else current_block = s.substr(i, u);
+	for (i=0; i<num_blocks; i++) { //Iterate over every full block
+		//current_block = s.substr(i*u, u);
+		char data[u+1];
+		ifs.read(data, u);
+		data[u] = 0x00;
+		string current_block (data);
 
 		// Inefficient: we don't really care about compression efficiency, but this could be better
 		// Figure out which index in R this is
@@ -132,7 +145,7 @@ string NavarroSeq::compress(string s)
 				}
 			}
 			if (is_match) {
-				r_vals.push_back(j);
+				r_vals.at(i) = j;
 				curr_r_index = j;
 				break;
 			}
@@ -141,151 +154,154 @@ string NavarroSeq::compress(string s)
 		// Next, find permutation Ii
 		E_table* table = E_table_ptrs.at(curr_r_index);
 		curr_l = ceil(log(table->entries.size()));
-		l_partial_sums.push_back(l_partial_sums.back() + curr_l);
+		l_partial_sums.at(i+1) = (l_partial_sums.at(i) + curr_l);
+
 		for (j=0; j<table->entries.size(); j++) {
 			G_entry* entry = table->entries.at(j);
 			if(current_block.compare(entry->sequence) == 0) {
-				i_vals.push_back(j);
+				i_vals.at(i) = j;
 				// update n_partial_sums:
 				for (k=0; k<r; k++) {
-					n_partial_sums.at((block_count+1)*r+k) = n_partial_sums.at(block_count*r+k) + curr_combination.at(k);
+					n_partial_sums.at((i+1)*r+k) = n_partial_sums.at(i*r+k) + curr_combination.at(k);
 				}
 				break;
 			}
 		}
-		block_count++;
 	}
-	string rmdr = s.substr(i);
-/*
-	// DEBUG
-	printf("n = %i; r = %i; u = %i\n", (int)n, (int)r, (int)u);
-	printf ("Vector size is %u\n", (unsigned int) combinations.size());
-	printf("Num blocks = %u\n", (unsigned int) num_blocks);
-	unsigned int count = 0;
-	unsigned int myindex = 0;
-	for(vector<vector<unsigned int> >::iterator it = combinations.begin(); it != combinations.end(); ++it) {
-		printf ("%u: (", myindex);
-		for (count=0; count<it->size(); count++) {
-			printf("%u",it->at(count));
-			if (count != it->size() - 1) printf(",");
-		}
-		printf(")\n");
-		myindex++;
-	}
-	for (i=0; i<combinations.size(); i++) {
-		E_table* etable = E_table_ptrs.at(i);
-		
-		printf("\nE Table for i = %u:\n", (unsigned int) i);
-		printf("------------------\n");
-		for (unsigned int j=0; j<etable->entries.size(); j++) {
-			G_entry* entry = etable->entries.at(j);
-			printf("%u: %s\n", j, entry->sequence.c_str());
-			for(unsigned int k=0; k<r; k++) {
-				for(unsigned int l=0; l<u; l++) {
-					printf("  %i", entry->ranks.at(k*u+l));
-				}
-				printf("\n");
-			}
-		}
-	}
-	printf("R Vals:\n-----------\n");
+
+	// Now for the remainder that didn't fit into a block:
+	int rmdr_length = n%u;
+	char data[rmdr_length+1];
+	ifs.read(data, rmdr_length);
+	data[rmdr_length] = 0x00;
+	string rmdr (data);
+
+	std::ofstream ofs(out_fname);
+
+	print_int(ofs, n);
+	print_int(ofs, r);
+	print_int(ofs, u);
+	print_int(ofs, num_blocks);
+	print_int(ofs, combinations.size());
+
 	for (i=0; i<r_vals.size(); i++) {
-		printf("%u (", r_vals.at(i));
-		for (j=0; j<r; j++) {
-			printf("%u", combinations.at(r_vals.at(i)).at(j));
-			if (j != r-1) printf(",");
-		}
-		printf(")\n");
+		print_int(ofs, r_vals.at(i));
 	}
-	printf("L partial sums:\n-------------\n");
-	for (i=0; i<l_partial_sums.size(); i++) {
-		printf("%u ", l_partial_sums.at(i));
-	}
-	printf("\n");
-	printf("N partial sums:\n-------------\n");
-	for (i=0; i<num_blocks; i++) {
-		for (j=0; j<r; j++) {
-			printf("%u ", n_partial_sums.at(i*r+j));
-		}
-		printf("\n");
-	}
-	printf("\n");
-	// END DEBUGGING
-*/
-	printf("Bit sequences:\n");
 	
-	printf("E table:\n-----------\n");
-		for (i=0; i<combinations.size(); i++) {
+	for (i=0; i<i_vals.size(); i++) {
+	  	print_int(ofs, i_vals.at(i));
+	}
+
+	for (i=0; i<l_partial_sums.size(); i++) {
+	  	print_int(ofs, l_partial_sums.at(i));
+	}
+
+	for (i=0; i<n_partial_sums.size(); i++) {
+		print_int(ofs, n_partial_sums.at(i));
+	}
+
+	unsigned int total_g_table_depth = 0;
+	print_int (ofs, total_g_table_depth);
+	for (i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
-		
+		total_g_table_depth += etable->entries.size();
+		print_int(ofs, total_g_table_depth);
+	}
+
+	for (i=0; i<E_table_ptrs.size(); i++) {
+		E_table* etable = E_table_ptrs.at(i);
 		for (unsigned int j=0; j<etable->entries.size(); j++) {
 			G_entry* entry = etable->entries.at(j);
-			cout << j;
-			for(unsigned int k=0; k<r; k++) {
-				for(unsigned int l=0; l<u; l++) {
-				  cout << entry->ranks.at(k*u+l);
-				}
-				printf("\n");
+			// Output compressed code
+			ofs << entry->sequence;
+			for(unsigned int k=0; k<entry->ranks.size(); k++) {
+				  ofs.put(entry->ranks.at(k));
 			}
 		}
 	}
-		printf("\n");
-	printf("I Vals:\n-----------\n");
-	for (i=0; i<i_vals.size(); i++) {
-	  cout << toBinStr(i_vals.at(i));
-		for (j=0; j<r; j++) {
-		  cout << toBinStr(combinations.at(i_vals.at(i)).at(j));
-		}
-	}
-	printf("\n");
-	printf("R Vals:\n-----------\n");
-	for (i=0; i<r_vals.size(); i++) {
-	  cout << toBinStr(r_vals.at(i));
-		for (j=0; j<r; j++) {
-		  cout << toBinStr(combinations.at(r_vals.at(i)).at(j));
-		}
-	}
-	printf("\n");
-	printf("L partial sums:\n-------------\n");
-	for (i=0; i<l_partial_sums.size(); i++) {
-	  cout << toBinStr(l_partial_sums.at(i));
-	}
 
-	printf("\n");
-	printf("N partial sums:\n-------------\n");
-	for (i=0; i<num_blocks; i++) {
-		for (j=0; j<r; j++) {
-		  cout << toBinStr(n_partial_sums.at(i*r+j));
-		}
-	}
-	printf("\n");
-
-	decompress(E_table_ptrs, r_vals, i_vals, l_partial_sums, n_partial_sums, rmdr);
-	char acc = access(u, E_table_ptrs, r_vals, i_vals, l_partial_sums, n_partial_sums,rmdr, 31);
-	cout << "31st index = " << acc << endl;
-
-	return "Hello World!"; //Replace "Hello World" with compressed string here
+	ofs << rmdr;
 }
 
-string NavarroSeq::decompress(vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr)
+string NavarroSeq::decompress(string filename)
 {
-	// For now, just assume we already have these to work with.
-	//vector<E_table*> E_table_ptrs;
-	//vector<unsigned int> r_vals; //Note: using unsigned int wastes space!
-	//vector<unsigned int> i_vals; //Note: using unsigned int wastes space!
-	//vector<unsigned int> l_partial_sums;
-	//vector<unsigned int> n_partial_sums; // 2-D: blocks and chars
+
+	std::ifstream ifs (filename, std::ifstream::in);
+
+	unsigned int i,j,k;
+	unsigned int n = get_int(ifs);
+	unsigned int r = get_int(ifs);
+	unsigned int u = get_int(ifs);
+	unsigned int num_blocks = get_int(ifs);
+	unsigned int num_combos = get_int(ifs);
+
+	vector<unsigned int> r_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	vector<unsigned int> i_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	vector<unsigned int> l_partial_sums (num_blocks+1, 0);
+	vector<unsigned int> E_table_depths (num_combos+1);
+	vector<E_table*> E_table_ptrs; // Mapping from R index to E table
+
+	// Populate r_vals
+	for (i=0; i<num_blocks; i++) {
+		r_vals.at(i) = get_int(ifs);
+	}
+
+	// Populate i_vals
+	for (i=0; i<num_blocks; i++) {
+		i_vals.at(i) = get_int(ifs);
+	}
+
+	// Populate l_partial_sums
+	for (i=0; i<num_blocks+1; i++) {
+		l_partial_sums.at(i) = get_int(ifs);
+	}
+
+	// Skip n_partial_sums
+	ifs.ignore((num_blocks+1)*r*4+4, EOF); 
+
+	// Populate E Table Depths
+	for (i=0; i<num_combos+1; i++) {
+		E_table_depths.at(i) = get_int(ifs);
+	}
+
+	// Populate E Tables
+	for (i=0; i<num_combos; i++) {
+		E_table* table = new E_table();
+		unsigned int num_entries = E_table_depths.at(i+1) - E_table_depths.at(i);
+		for (j=0; j<num_entries; j++) {
+			char c_sequence[u+1];
+			for (k=0; k<u; k++) {
+				c_sequence[k] = ifs.get();
+			}
+			c_sequence[u] = 0x00;
+			string sequence (c_sequence);
+			vector<char> ranks (r*u, 0);
+			for (k=0; k<r*u; k++) {
+				ranks.at(k) = ifs.get();
+			}
+			G_entry* entry = new G_entry(sequence, ranks);
+			table->add_entry(entry);
+		}
+		E_table_ptrs.push_back(table);
+	}
+
+	char c;
+	string rmdr = "";
+	while ((c = ifs.get()) != EOF) {
+		rmdr = rmdr + c;
+	}
 
 	string s = "";
-
-	for (unsigned int i=0; i<r_vals.size(); i++) {
+	
+	for (unsigned int i=0; i<num_blocks; i++) {
 		E_table* table = E_table_ptrs.at(r_vals.at(i));
 		G_entry* entry = table->entries.at(i_vals.at(i));
 		s += entry->sequence;
 	}
 
 	cout << "DECOMPRESSED STRING = " << s << rmdr << endl;
-	return "Hello again, world!";
+	
+	return s;
 }
 
 char NavarroSeq::access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, int index)
@@ -298,9 +314,15 @@ char NavarroSeq::access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<u
 	return retval;
 }
 
-unsigned int NavarroSeq::rank(string s, char c, int index)
+unsigned int NavarroSeq::rank(unsigned int u, unsigned int r, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, char c, int index)
 {
-	return 14;
+	unsigned int block = floor(index/u);
+	unsigned int l = index - block*u;
+	E_table* table = E_table_ptrs.at(r_vals.at(block));
+	G_entry* entry = table->entries.at(i_vals.at(block));
+	unsigned int char_index_in_alphabet = 1;
+	unsigned int rank = n_partial_sums.at(r*block + char_index_in_alphabet) + entry->ranks.at(u*char_index_in_alphabet + l);
+	return rank;
 }
 
 unsigned int NavarroSeq::select(string s, char c, int index)
@@ -390,7 +412,9 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 
 int main() {
 	// test sequence
-	NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
+	//NavarroSeq::compress("testin.txt", "testout.txt");
+	//NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
+	NavarroSeq::decompress("testout.txt");
 
 	return 0;
 }
