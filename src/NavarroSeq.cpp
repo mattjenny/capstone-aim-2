@@ -304,28 +304,49 @@ string NavarroSeq::decompress(string filename)
 	return s;
 }
 
-char NavarroSeq::access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, int index)
+char NavarroSeq::access(string fname, int index)
 {
+	std::ifstream ifs (fname, std::ifstream::in);
+
+	unsigned int i,j,k;
+	unsigned int n = get_int(ifs);
+	unsigned int r = get_int(ifs);
+	unsigned int u = get_int(ifs);
+	unsigned int num_blocks = get_int(ifs);
+	unsigned int num_combos = get_int(ifs);
+
 	unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
-	E_table* table = E_table_ptrs.at(r_vals.at(block));
-	G_entry* entry = table->entries.at(i_vals.at(block));
-	char retval = entry->sequence.at(l);
+
+	ifs.seekg((5 + block) * 4);
+	unsigned int r_val = get_int(ifs);
+
+	ifs.seekg((5 + num_blocks + block) * 4);
+	unsigned int i_val = get_int(ifs);
+
+	ifs.seekg((7+num_blocks*(3+r)+r + r_val)*4);
+	unsigned int E_depth = get_int(ifs);
+
+	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + l);
+	char retval = ifs.get();
+
 	return retval;
 }
 
-unsigned int NavarroSeq::rank(unsigned int u, unsigned int r, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, char c, int index)
+unsigned int NavarroSeq::rank(string fname, char c, int index)
 {
-	unsigned int block = floor(index/u);
+	/*unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
 	E_table* table = E_table_ptrs.at(r_vals.at(block));
 	G_entry* entry = table->entries.at(i_vals.at(block));
 	unsigned int char_index_in_alphabet = 1;
 	unsigned int rank = n_partial_sums.at(r*block + char_index_in_alphabet) + entry->ranks.at(u*char_index_in_alphabet + l);
 	return rank;
+	*/
+	return 0;
 }
 
-unsigned int NavarroSeq::select(string s, char c, int index)
+unsigned int NavarroSeq::select(string fname, char c, int index)
 {
 	return 55;
 }
@@ -414,7 +435,8 @@ int main() {
 	// test sequence
 	//NavarroSeq::compress("testin.txt", "testout.txt");
 	//NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
-	NavarroSeq::decompress("testout.txt");
+	//NavarroSeq::decompress("testout.txt");
+	NavarroSeq::access("testout.txt",31);
 
 	return 0;
 }

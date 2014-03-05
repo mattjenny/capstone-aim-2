@@ -16,9 +16,9 @@ class NavarroSeq
 public:
 	static void compress(string in_fname, string out_fname);
 	static string decompress(string filename);
-	static char access(unsigned int u, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, int index);
-	static unsigned int rank(unsigned int u, unsigned int r, vector<E_table*>& E_table_ptrs, vector<unsigned int>& r_vals, vector<unsigned int>& i_vals, vector<unsigned int>& l_partial_sums, vector<unsigned int>& n_partial_sums, string rmdr, char c, int index);
-	static unsigned int select(string s, char c, int index);
+	static char access(string fname, int index);
+	static unsigned int rank(string fname, char c, int index);
+	static unsigned int select(string fname, char c, int index);
 
 private:
 	NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet);
