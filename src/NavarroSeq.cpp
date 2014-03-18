@@ -371,7 +371,8 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 
 	return rank;
 
-	/*unsigned int block = floor(index/u);
+	/*
+	unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
 	E_table* table = E_table_ptrs.at(r_vals.at(block));
 	G_entry* entry = table->entries.at(i_vals.at(block));
@@ -468,11 +469,11 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 
 int main() {
 	// test sequence
-	//NavarroSeq::compress("testin.txt", "testout.txt");
+	//NavarroSeq::compress("testin.txt", "testout2.txt");
 	//NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
-	//NavarroSeq::decompress("testout.txt");
+	NavarroSeq::decompress("testout.txt");
 	//cout << NavarroSeq::access("testout.txt",31) << endl;
-	NavarroSeq::rank("testout.txt",0x62,31);
+	//NavarroSeq::rank("testout.txt",0x62,31);
 
 	return 0;
 }
