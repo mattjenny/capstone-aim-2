@@ -19,6 +19,7 @@ public:
 	static char access(string fname, int index);
 	static unsigned int rank(string fname, char c, int index);
 	static unsigned int select(string fname, char c, int index);
+	static unsigned int get_size(string fname);
 
 private:
 	NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet);

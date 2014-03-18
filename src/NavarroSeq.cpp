@@ -184,6 +184,10 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	print_int(ofs, num_blocks);
 	print_int(ofs, combinations.size());
 
+	for (list<char>::iterator alphabet_it = alphabet.begin(); alphabet_it != alphabet.end(); ++alphabet_it) {
+		ofs.put(*alphabet_it);
+	}
+
 	for (i=0; i<r_vals.size(); i++) {
 		print_int(ofs, r_vals.at(i));
 	}
@@ -234,6 +238,11 @@ string NavarroSeq::decompress(string filename)
 	unsigned int u = get_int(ifs);
 	unsigned int num_blocks = get_int(ifs);
 	unsigned int num_combos = get_int(ifs);
+
+	// Skip stored alphabet
+	for (i=0; i<r; i++) {
+		ifs.get();
+	}
 
 	vector<unsigned int> r_vals (num_blocks, 0); //Note: using unsigned int wastes space!
 	vector<unsigned int> i_vals (num_blocks, 0); //Note: using unsigned int wastes space!
@@ -315,19 +324,24 @@ char NavarroSeq::access(string fname, int index)
 	unsigned int num_blocks = get_int(ifs);
 	unsigned int num_combos = get_int(ifs);
 
+	// Skip stored alphabet
+	for (i=0; i<r; i++) {
+		ifs.get();
+	}
+
 	unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
 
-	ifs.seekg((5 + block) * 4);
+	ifs.seekg((5 + block) * 4 + r);
 	unsigned int r_val = get_int(ifs);
 
-	ifs.seekg((5 + num_blocks + block) * 4);
+	ifs.seekg((5 + num_blocks + block) * 4 + r);
 	unsigned int i_val = get_int(ifs);
 
-	ifs.seekg((7+num_blocks*(3+r)+r + r_val)*4);
+	ifs.seekg((7+num_blocks*(3+r) + r + r_val)*4 + r);
 	unsigned int E_depth = get_int(ifs);
 
-	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + l);
+	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + l + r);
 	char retval = ifs.get();
 
 	return retval;
@@ -338,7 +352,7 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 
 	std::ifstream ifs (fname, std::ifstream::in);
 
-	unsigned int char_index_in_alphabet = 1; // hard coded for now
+	unsigned int char_index_in_alphabet = 0; // hard coded for now
 
 	unsigned int i,j,k;
 	unsigned int n = get_int(ifs);
@@ -347,44 +361,46 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 	unsigned int num_blocks = get_int(ifs);
 	unsigned int num_combos = get_int(ifs);
 
+	// Find in stored alphabet
+	for (i=0; i<r; i++) {
+		char current_char = ifs.get();
+		if (current_char == c) char_index_in_alphabet = i;
+	}
+
 	unsigned int block = floor(index/u);
 	unsigned int l = index - block*u;
 
-	ifs.seekg((5 + block) * 4);
+	ifs.seekg((5 + block) * 4 + r);
 	unsigned int r_val = get_int(ifs);
 
-	ifs.seekg((5 + num_blocks + block) * 4);
+	ifs.seekg((5 + num_blocks + block) * 4 + r);
 	unsigned int i_val = get_int(ifs);
 
-	ifs.seekg((7 + 3*num_blocks + r*block + char_index_in_alphabet) * 4);
+	ifs.seekg((7 + 3*num_blocks + r*block + char_index_in_alphabet) * 4 + r);
 	unsigned int n_partial_sum = get_int(ifs);
 
-	ifs.seekg((7+num_blocks*(3+r)+r + r_val)*4);
+	ifs.seekg((7+num_blocks*(3+r)+r + r_val)*4 + r);
 	unsigned int E_depth = get_int(ifs);
 
-	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + u + u*char_index_in_alphabet + l);
+	ifs.seekg((8+num_blocks*(3+r)+r+num_combos)*4 + E_depth*((r + 1) * u) + u + u*char_index_in_alphabet + l + r);
 	char block_rank = ifs.get();
 
 	unsigned int rank = n_partial_sum + block_rank;
 
-	cout << "RANK = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
+	//cout << "RANK = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
 
 	return rank;
 
-	/*
-	unsigned int block = floor(index/u);
-	unsigned int l = index - block*u;
-	E_table* table = E_table_ptrs.at(r_vals.at(block));
-	G_entry* entry = table->entries.at(i_vals.at(block));
-	unsigned int char_index_in_alphabet = 1;
-	unsigned int rank = n_partial_sums.at(r*block + char_index_in_alphabet) + entry->ranks.at(u*char_index_in_alphabet + l);
-	return rank;
-	*/
 }
 
 unsigned int NavarroSeq::select(string fname, char c, int index)
 {
 	return 55;
+}
+
+unsigned int NavarroSeq::get_size(string fname) {
+	std::ifstream ifs (fname, std::ifstream::in);
+	return get_int(ifs);
 }
 
 vector<vector<unsigned int> > NavarroSeq::get_all_combinations(size_t r, size_t u) // r is alphabet size; u is block size
@@ -467,13 +483,13 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 	return table;
 }
 
-int main() {
+/*int main() {
 	// test sequence
-	NavarroSeq::compress("testin.txt", "testout.txt");
+	//NavarroSeq::compress("testin.txt", "testout.txt");
 	//NavarroSeq::compress("abbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabbabaababbababcabc");
 	//NavarroSeq::decompress("testout.txt");
 	//cout << NavarroSeq::access("testout.txt",31) << endl;
-	//NavarroSeq::rank("testout.txt",0x62,31);
+	NavarroSeq::rank("testout.txt",0x62,31);
 
 	return 0;
-}
+}*/
