@@ -26,8 +26,19 @@ string get_high_frequency_variants(string filename, unsigned int population_size
 	return ss.str();
 }
 
-int main() {
-	//NavarroSeq::compress("testin.txt", "testout.txt");
-	string s = get_high_frequency_variants("testout.txt", 4, 4, 0.5);
-	cout << "RESULT STRING: (row indices where percent variants > cutoff): " << s << endl;
+int main(int argc, char** argv) {
+
+	bool compress = false;
+	if (argc > 1) {
+		if (strcmp("-compress", argv[1]) == 0) {
+			compress = true;
+		} 
+	}
+
+	if (compress) {
+		NavarroSeq::compress("testin.txt", "testout.txt");
+	} else {
+		string s = get_high_frequency_variants("testout.txt", 20, 10, 0.5);
+		cout << "RESULT STRING: (row indices where percent variants >= cutoff): " << s << endl;
+	}
 }

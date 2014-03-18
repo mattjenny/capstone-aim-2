@@ -387,7 +387,7 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 
 	unsigned int rank = n_partial_sum + block_rank;
 
-	//cout << "RANK = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
+	//cout << "RANK for index " << index << " = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
 
 	return rank;
 
