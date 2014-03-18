@@ -88,6 +88,7 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 
 	// Calculate block length u and number of blocks
 	u = floor(0.5*log((double) n)/log((double) r));
+	if (u <= 0) u = 1; //block size must be positive
 	num_blocks = floor((n+0.0)/u);
 
 	// Create private instance of NavarroSeq
