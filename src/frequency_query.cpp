@@ -29,16 +29,33 @@ string get_high_frequency_variants(string filename, unsigned int population_size
 int main(int argc, char** argv) {
 
 	bool compress = false;
+	bool decompress = false;
+	string fileIn = "";
+	string fileOut = "";
+
 	if (argc > 1) {
 		if (strcmp("-compress", argv[1]) == 0) {
 			compress = true;
+			fileIn = argv[2];
+			fileOut = argv[3];
 		} 
+		else if (strcmp("-decompress", argv[1]) == 0) {
+			decompress = true;
+			fileIn = argv[2];
+		} else {
+			fileIn = argv[1];
+		}
+	} else {
+		cout << "Not enough arguments!" << endl;
+		return 0;
 	}
 
 	if (compress) {
-		NavarroSeq::compress("testin.txt", "testout.txt");
+		NavarroSeq::compress(fileIn, fileOut);
+	} else if (decompress) {
+		NavarroSeq::decompress(fileIn);
 	} else {
-		string s = get_high_frequency_variants("testout.txt", 20, 10, 0.5);
+		string s = get_high_frequency_variants(fileIn, 20, 10, 0.5);
 		cout << "RESULT STRING: (row indices where percent variants >= cutoff): " << s << endl;
 	}
 }
