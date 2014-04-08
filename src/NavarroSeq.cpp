@@ -26,28 +26,36 @@ union {
 unsigned char on_deck = 0x00;
 int num_bits_on_deck = 0;
 
-unsigned char on_deck_read = 0x00;
-int num_bits_on_deck_read = 0;
+//unsigned char on_deck_read = 0x00;
+//int num_bits_on_deck_read = 0;
 
-void print_char_with_num_bits(char c_in, int num_bits) {
+void print_char_with_num_bits(std::ofstream & ofs, char c_in, int num_bits) {
+	cout << "Calling print_char_with_num_bits with " << num_bits << " bits.  " << num_bits_on_deck << " bits on deck." << endl;
+	unsigned char c = (unsigned char) c_in;
+	if (num_bits == 0) return;
 	if (num_bits_on_deck + num_bits < BYTE_SIZE) {
-		on_deck = on_deck + (0xff >> num_bits_on_deck) & (c_in << (8-num_bits-num_bits_on_deck));
+		unsigned char added_bits = c << (8-num_bits-num_bits_on_deck);
+		on_deck += added_bits;
+		//on_deck = on_deck + (0xff >> num_bits_on_deck) & (c_in << (8-num_bits-num_bits_on_deck));
 		num_bits_on_deck += num_bits;
+		printf("Adding %02x to on_deck; on_deck now = %02x with %d bits.\n", c, on_deck, num_bits_on_deck);
 	}
 	else {
-		unsigned char c = (unsigned char) c_in;
 		int shift_length = num_bits_on_deck + num_bits - 8;
 		cout << "Shifting " << shift_length << " places." << endl;
-		unsigned char shifted_c = c >> shift_length;
-		printf("c = %02x; Shifted c = %02x\n", c, shifted_c);
+		unsigned char shifted_c_filter = (unsigned char)0xff >> (8-(num_bits - shift_length));
+		unsigned char shifted_c = (c >> shift_length) & shifted_c_filter;
+		printf("c = %02x; Shifted c = %02x using filter %02x\n", c, shifted_c, shifted_c_filter);
 		unsigned char retval = on_deck + (shifted_c);
 		printf("retval = %02x + %02x = %02x\n", on_deck, shifted_c, retval);
 		num_bits_on_deck = shift_length;
 		on_deck = c << (8 - shift_length);
+		ofs.put(retval);
+		printf("After printing, on_deck = %02x with %d bits.\n", on_deck, num_bits_on_deck);
 	}
 }
 
-void print_with_num_bits(unsigned int integer, int num_bits) {
+void print_with_num_bits(std::ofstream & ofs, unsigned int integer, int num_bits) {
 
 	if (num_bits > 32) {
 		cout << "There aren't that many bits in an int." << endl;
@@ -64,39 +72,40 @@ void print_with_num_bits(unsigned int integer, int num_bits) {
 
 	int prev_bits_left = num_bits_on_deck;
 	int mod_bits = num_bits % 8;
+	if (mod_bits == 0) mod_bits = 8;
 	int max_byte = (num_bits - 1)/8;
-	print_char_with_num_bits(four_byte_union.byte[max_byte], mod_bits);
+	print_char_with_num_bits(ofs, four_byte_union.byte[max_byte], mod_bits);
 
 	for (i=max_byte - 1; i>=0; i--) {
-		print_char_with_num_bits(four_byte_union.byte[i], 8);
+		print_char_with_num_bits(ofs, four_byte_union.byte[i], 8);
 	} 
 }
 
-unsigned char get_char_with_num_bits(char c_in, int num_bits) {
+unsigned char get_char_with_num_bits(std::ifstream & ifs, int num_bits) {
 	if (num_bits > 8) {
 		cout << "Char length must not exceed eight bits!" << endl;
 		return 0;
 	}
 
 	unsigned char retval;
-	unsigned char c = (unsigned char) c_in;
 
-	if (num_bits <= num_bits_on_deck_read) {
-		retval = on_deck_read >> (8 - num_bits);
-		on_deck_read = on_deck_read << num_bits;
-		num_bits_on_deck_read -= num_bits;
+	if (num_bits <= num_bits_on_deck) {
+		retval = on_deck >> (8 - num_bits);
+		on_deck = on_deck << num_bits;
+		num_bits_on_deck -= num_bits;
 	}
 	else {
-		retval = (on_deck_read >> (8 - num_bits)) + (c >> (8 - num_bits + num_bits_on_deck_read));
-		on_deck_read = c << (num_bits - num_bits_on_deck_read);
-		num_bits_on_deck_read = 8 - num_bits + num_bits_on_deck_read;
+		unsigned char c = (unsigned char) ifs.get();
+		retval = (on_deck >> (8 - num_bits)) + (c >> (8 - num_bits + num_bits_on_deck));
+		on_deck = c << (num_bits - num_bits_on_deck);
+		num_bits_on_deck = 8 - num_bits + num_bits_on_deck;
 	}
 
 	printf("Retval = %02x\n", retval);
 	return retval;
 }
 
-void get_int_with_num_bits(int num_bits) {
+void get_int_with_num_bits(std::ifstream & ifs, int num_bits) {
 	if (num_bits > 32) {
 		cout << "There aren't that many bits in an int." << endl;
 		return;
@@ -104,22 +113,24 @@ void get_int_with_num_bits(int num_bits) {
 		return;
 	}
 
-	char testArray[] = {0xaa, 0xbb, 0xcc, 0xdd};
-
 	for (int i=0; i<NUM_BYTES_IN_INT; i++) {
 		if ((3-i)*8 >= num_bits) {
-			four_byte_union.byte[i] = 0x00;
+			four_byte_union.byte[3-i] = 0x00;
 		}
 		else if ((4-i)*8 <= num_bits) {
-			four_byte_union.byte[i] = get_char_with_num_bits(testArray[i], BYTE_SIZE);
+			four_byte_union.byte[3-i] = get_char_with_num_bits(ifs, BYTE_SIZE);
 		} 
 		else {
-			four_byte_union.byte[i] = get_char_with_num_bits(testArray[i], num_bits % BYTE_SIZE);
+			four_byte_union.byte[3-i] = get_char_with_num_bits(ifs, num_bits % BYTE_SIZE);
 		}
 	}
-	
-	printf("Int = %08x = %d\n", four_byte_union.integer, four_byte_union.integer);
 
+	printf("Int = %08x = %u\n", four_byte_union.integer, four_byte_union.integer);
+
+}
+
+void print_remainder(std::ofstream & ofs) {
+	ofs.put(on_deck);
 }
 
 void print_int(std::ofstream & ofs, unsigned int integer) {
@@ -636,19 +647,30 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 
 int main() {
 
-	on_deck_read = 0xe0;
-	num_bits_on_deck_read = 3;
-	get_int_with_num_bits(32);
-	//get_char_with_num_bits(0x06, 6);
-	//get_char_with_num_bits(0x00, 4);
-	//get_char_with_num_bits(0xff, 8);
-	//get_char_with_num_bits(0x7e, 4);
-	//on_deck = 0xc0;
-	//num_bits_on_deck = 3;
-	//char a = 0x15;
-	//print_with_num_bits(0x1500ff5b, 30);
-	//print_char_with_num_bits(a,6);
-	//print_char_with_num_bits(0x00,8);
+/*
+	unsigned int testint = 42;
+	std::ofstream ofs("test-byte-compression.txt");
+	print_char_with_num_bits(ofs, 0x03, 2);
+	print_char_with_num_bits(ofs, 0x00, 2);
+	print_char_with_num_bits(ofs, 0x02, 2);
+	print_char_with_num_bits(ofs, 0x6f, 6);
+	print_with_num_bits(ofs, 0xaabbccdd, 32);
+	print_with_num_bits(ofs, testint, 7);
+	print_with_num_bits(ofs, 0x1abbccdd, 29);
+	print_remainder(ofs);
+*/
+
+/*
+	std::ifstream ifs ("test-byte-compression.txt", std::ifstream::in);
+	get_char_with_num_bits(ifs, 2);
+	get_char_with_num_bits(ifs, 2);
+	get_char_with_num_bits(ifs, 2);
+	get_char_with_num_bits(ifs, 6);
+	get_int_with_num_bits(ifs, 32);
+	get_int_with_num_bits(ifs, 7);
+	get_int_with_num_bits(ifs, 29);
+*/
+
 	return 0;
 }
 
