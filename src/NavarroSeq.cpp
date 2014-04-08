@@ -12,6 +12,9 @@
 
 using namespace std;
 
+int BYTE_SIZE = 8;
+int NUM_BYTES_IN_INT = 4;
+
 size_t nseq_n, nseq_r, nseq_u;
 vector<char> nseq_alphabet;
 
@@ -19,6 +22,105 @@ union {
 	unsigned int integer;
 	char byte[4];
 } four_byte_union;
+
+unsigned char on_deck = 0x00;
+int num_bits_on_deck = 0;
+
+unsigned char on_deck_read = 0x00;
+int num_bits_on_deck_read = 0;
+
+void print_char_with_num_bits(char c_in, int num_bits) {
+	if (num_bits_on_deck + num_bits < BYTE_SIZE) {
+		on_deck = on_deck + (0xff >> num_bits_on_deck) & (c_in << (8-num_bits-num_bits_on_deck));
+		num_bits_on_deck += num_bits;
+	}
+	else {
+		unsigned char c = (unsigned char) c_in;
+		int shift_length = num_bits_on_deck + num_bits - 8;
+		cout << "Shifting " << shift_length << " places." << endl;
+		unsigned char shifted_c = c >> shift_length;
+		printf("c = %02x; Shifted c = %02x\n", c, shifted_c);
+		unsigned char retval = on_deck + (shifted_c);
+		printf("retval = %02x + %02x = %02x\n", on_deck, shifted_c, retval);
+		num_bits_on_deck = shift_length;
+		on_deck = c << (8 - shift_length);
+	}
+}
+
+void print_with_num_bits(unsigned int integer, int num_bits) {
+
+	if (num_bits > 32) {
+		cout << "There aren't that many bits in an int." << endl;
+		return;
+	} else if (num_bits == 0) {
+		return;
+	}
+
+	four_byte_union.integer = integer;
+
+	char prev = on_deck;
+	char next = 0;
+	int i;
+
+	int prev_bits_left = num_bits_on_deck;
+	int mod_bits = num_bits % 8;
+	int max_byte = (num_bits - 1)/8;
+	print_char_with_num_bits(four_byte_union.byte[max_byte], mod_bits);
+
+	for (i=max_byte - 1; i>=0; i--) {
+		print_char_with_num_bits(four_byte_union.byte[i], 8);
+	} 
+}
+
+unsigned char get_char_with_num_bits(char c_in, int num_bits) {
+	if (num_bits > 8) {
+		cout << "Char length must not exceed eight bits!" << endl;
+		return 0;
+	}
+
+	unsigned char retval;
+	unsigned char c = (unsigned char) c_in;
+
+	if (num_bits <= num_bits_on_deck_read) {
+		retval = on_deck_read >> (8 - num_bits);
+		on_deck_read = on_deck_read << num_bits;
+		num_bits_on_deck_read -= num_bits;
+	}
+	else {
+		retval = (on_deck_read >> (8 - num_bits)) + (c >> (8 - num_bits + num_bits_on_deck_read));
+		on_deck_read = c << (num_bits - num_bits_on_deck_read);
+		num_bits_on_deck_read = 8 - num_bits + num_bits_on_deck_read;
+	}
+
+	printf("Retval = %02x\n", retval);
+	return retval;
+}
+
+void get_int_with_num_bits(int num_bits) {
+	if (num_bits > 32) {
+		cout << "There aren't that many bits in an int." << endl;
+		return;
+	} else if (num_bits == 0) {
+		return;
+	}
+
+	char testArray[] = {0xaa, 0xbb, 0xcc, 0xdd};
+
+	for (int i=0; i<NUM_BYTES_IN_INT; i++) {
+		if ((3-i)*8 >= num_bits) {
+			four_byte_union.byte[i] = 0x00;
+		}
+		else if ((4-i)*8 <= num_bits) {
+			four_byte_union.byte[i] = get_char_with_num_bits(testArray[i], BYTE_SIZE);
+		} 
+		else {
+			four_byte_union.byte[i] = get_char_with_num_bits(testArray[i], num_bits % BYTE_SIZE);
+		}
+	}
+	
+	printf("Int = %08x = %d\n", four_byte_union.integer, four_byte_union.integer);
+
+}
 
 void print_int(std::ofstream & ofs, unsigned int integer) {
 	four_byte_union.integer = integer;
@@ -55,6 +157,7 @@ NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet)
 
 void NavarroSeq::compress(string in_fname, string out_fname)
 {
+	cout << "Beginning compression..." << endl;
 	/*
 	* n is the length of the full sequence s
 	* r is the number of characters in the alphabet
@@ -71,13 +174,23 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	n = ifs.tellg();
 	ifs.seekg(0, ifs.beg);
 
+	cout << "Determining alphabet..." << endl;
+
+	int percent_complete = 0;
+
 	// Figure out the alphabet that this sequence uses
 	unordered_set<char> unique_chars;
 	for (i=0; i<n; i++) {
+		if ((((float)i)/n)*100 > percent_complete + 1) {
+			cout << "Alphabet " << percent_complete << "%% complete..." << endl;
+			percent_complete++;
+		}
 		unique_chars.insert(ifs.get());
 	}
 	ifs.seekg(0, ifs.beg);
 	r = unique_chars.size();
+
+	cout << "Sorting alphabet..." << endl;
 
 	// Sort the alphabet
 	list<char> alphabet;
@@ -91,11 +204,15 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	if (u <= 0) u = 1; //block size must be positive
 	num_blocks = floor((n+0.0)/u);
 
+	cout << "Creating helper object..." << endl;
+
 	// Create private instance of NavarroSeq
 	NavarroSeq* nseq = new NavarroSeq(n, r, u, alphabet);
 	
 	// Enumerate and index all possible COMBINATIONS of alphabet characters
 	vector<vector<unsigned int> > combinations = get_all_combinations(unique_chars.size(), u);
+
+	cout << "Creating E Tables..." << endl;
 
 	//Create E tables:
 	vector<E_table*> E_table_ptrs; // Mapping from R index to E table
@@ -105,21 +222,33 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 		E_table_ptrs.push_back(etable);
 	}
 
+	cout << "Creating other vectors..." << endl;
+
 	/*
 	* r_vals: the fixed-length Ri identifiers for the combination of each block i
 	* i_vals: the variable-length Ii identifiers for the permutation of each block i
 	* l_partial_sums: the sum of I encoding lengths up to block i
 	* n_partial_sums: the sum of character counts for each character up to block i
 	*/
+	cout << "Initializing r_vals vector..." << endl;
 	vector<unsigned int> r_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	cout << "Initializing i_vals vector..." << endl;
 	vector<unsigned int> i_vals (num_blocks, 0); //Note: using unsigned int wastes space!
+	cout << "Initializing l_partial_sums vector..." << endl;
 	vector<unsigned int> l_partial_sums (num_blocks+1, 0); //NOT exactly the definiteion from Navarro; num G entries
+	cout << "Initializing n_partial_sums vector..." << endl;
 	vector<unsigned int> n_partial_sums ((num_blocks+1)*r, 0); // 2-D: blocks and chars
-
+	cout << "Done initializing vectors." << endl;
 	l_partial_sums.push_back(0);
+
+	percent_complete = 0;
 
 	unsigned int curr_r_index, curr_i_index, curr_l;
 	for (i=0; i<num_blocks; i++) { //Iterate over every full block
+		if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
+			cout << "Compression " << percent_complete << "%% complete..." << endl;
+			percent_complete++;
+		}
 		//current_block = s.substr(i*u, u);
 		char data[u+1];
 		ifs.read(data, u);
@@ -170,12 +299,16 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 		}
 	}
 
+	cout << "Computing remainder..." << endl;
+
 	// Now for the remainder that didn't fit into a block:
 	int rmdr_length = n%u;
 	char data[rmdr_length+1];
 	ifs.read(data, rmdr_length);
 	data[rmdr_length] = 0x00;
 	string rmdr (data);
+
+	cout << "Opening output filestream..." << endl;
 
 	std::ofstream ofs(out_fname);
 
@@ -185,25 +318,37 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	print_int(ofs, num_blocks);
 	print_int(ofs, combinations.size());
 
+	cout << "Printing alphabet..." << endl;
+
 	for (list<char>::iterator alphabet_it = alphabet.begin(); alphabet_it != alphabet.end(); ++alphabet_it) {
 		ofs.put(*alphabet_it);
 	}
+
+	cout << "Printing R vals..." << endl;
 
 	for (i=0; i<r_vals.size(); i++) {
 		print_int(ofs, r_vals.at(i));
 	}
 	
+	cout << "Printing I vals..." << endl;
+
 	for (i=0; i<i_vals.size(); i++) {
 	  	print_int(ofs, i_vals.at(i));
 	}
+
+	cout << "Printing L vals..." << endl;
 
 	for (i=0; i<l_partial_sums.size(); i++) {
 	  	print_int(ofs, l_partial_sums.at(i));
 	}
 
+	cout << "Printing N vals..." << endl;
+
 	for (i=0; i<n_partial_sums.size(); i++) {
 		print_int(ofs, n_partial_sums.at(i));
 	}
+
+	cout << "Printing E Table pointers..." << endl;
 
 	unsigned int total_g_table_depth = 0;
 	print_int (ofs, total_g_table_depth);
@@ -213,6 +358,8 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 		print_int(ofs, total_g_table_depth);
 	}
 
+	cout << "Printing E Tables..." << endl;
+
 	for (i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
 		for (unsigned int j=0; j<etable->entries.size(); j++) {
@@ -220,12 +367,14 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 			// Output compressed code
 			ofs << entry->sequence;
 			for(unsigned int k=0; k<entry->ranks.size(); k++) {
-				  ofs.put(entry->ranks.at(k));
+				  ofs.put(entry->ranks.at(k)); // log u bits
 			}
 		}
 	}
 
 	ofs << rmdr;
+
+	cout << "Finished Successfully!" << endl;
 }
 
 string NavarroSeq::decompress(string filename)
@@ -327,6 +476,7 @@ char NavarroSeq::access(string fname, int index)
 
 	// Skip stored alphabet
 	for (i=0; i<r; i++) {
+		//cout << i << endl;
 		ifs.get();
 	}
 
@@ -482,6 +632,24 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 		get_etable_rows(prefix, ranks, remaining_combo, table);
 	}
 	return table;
+}
+
+int main() {
+
+	on_deck_read = 0xe0;
+	num_bits_on_deck_read = 3;
+	get_int_with_num_bits(32);
+	//get_char_with_num_bits(0x06, 6);
+	//get_char_with_num_bits(0x00, 4);
+	//get_char_with_num_bits(0xff, 8);
+	//get_char_with_num_bits(0x7e, 4);
+	//on_deck = 0xc0;
+	//num_bits_on_deck = 3;
+	//char a = 0x15;
+	//print_with_num_bits(0x1500ff5b, 30);
+	//print_char_with_num_bits(a,6);
+	//print_char_with_num_bits(0x00,8);
+	return 0;
 }
 
 /*int main() {
