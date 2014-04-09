@@ -44,7 +44,7 @@ for(int i = 0; i < 9; i++)
     {
       current = file.get();
       //for test data
-      if(current == '\n')
+      if(current == '\n' || current == ' ')
 	{
 	  i++;
 	  current = file.get();
@@ -53,6 +53,7 @@ for(int i = 0; i < 9; i++)
       if(i == get_size(filename))
 	break;
 
+      //cout << current;
       if(current == '0' && (last == '1' || last == '2'))
 	{
 	  if(last == '1')
@@ -159,6 +160,7 @@ for(int i = 0; i < 9; i++)
 	cout << "error: " << window << endl;
       last = current;
     }
+  //cout << endl;
   return frequencies;
 }
 
