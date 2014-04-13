@@ -31,9 +31,7 @@ int num_bits_on_deck = 0;
 **********************************************************************************************************************************/
 
 void print_char(std::ofstream & ofs, char c_in, unsigned int num_bits) {
-	//cout << "Calling print_char_with_num_bits with " << num_bits << " bits.  " << num_bits_on_deck << " bits on deck." << endl;
 	unsigned char c = (unsigned char) c_in;
-	printf("PRINTING CHAR %02x, %u\n", c_in, num_bits);
 	if (num_bits == 0) return;
 	if (num_bits_on_deck + num_bits < BYTE_SIZE) {
 		unsigned char added_bits = c << (8-num_bits-num_bits_on_deck);
@@ -51,7 +49,6 @@ void print_char(std::ofstream & ofs, char c_in, unsigned int num_bits) {
 		//printf("retval = %02x + %02x = %02x\n", on_deck, shifted_c, retval);
 		num_bits_on_deck = shift_length;
 		on_deck = c << (8 - shift_length);
-		printf("  actually printing %02x\n", retval);
 		ofs.put(retval);
 		//printf("After printing, on_deck = %02x with %d bits.\n", on_deck, num_bits_on_deck);
 	}
@@ -103,7 +100,6 @@ unsigned char get_char(std::ifstream & ifs, int num_bits) {
 		num_bits_on_deck = 8 - num_bits + num_bits_on_deck;
 	}
 
-	printf("READING CHAR %02x\n", retval);
 	return retval;
 }
 
@@ -322,36 +318,36 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 
 	unsigned int r_int_size = ceil(log2(combinations.size()));
 	cout << "Printing R vals with " << r_int_size << " bits... " << combinations.size() << " possible combos." << endl;
+	cout << "  Total R size = " << r_int_size*r_vals.size() << " bits." << endl;
 	for (i=0; i<r_vals.size(); i++) {
 		print_int(ofs, r_vals.at(i), r_int_size);
-		cout << "  " << r_vals.at(i) << endl;
 	}
 
 	unsigned int l_int_size = ceil(log2(n*log2(r)));
 	cout << "Printing L vals with " << l_int_size << " bits..." << endl;
+	cout << "  Total L size = " << l_int_size*(num_blocks+1) << " bits." << endl;
 	for (i=0; i<num_blocks+1; i++) {
 	  	print_int(ofs, l_partial_sums.at(i), l_int_size);
-	  	cout << "  " << l_partial_sums.at(i) << endl;
 	}
 	
 	cout << "Printing I vals..." << endl;
-
+	cout << "  Total I size = " << l_partial_sums.at(num_blocks) << " bits." << endl;
 	unsigned int current_i_size;
 	for (i=0; i<i_vals.size(); i++) {
 		current_i_size = l_partial_sums.at(i+1) - l_partial_sums.at(i);
 	  	print_int(ofs, i_vals.at(i), current_i_size);
-	  	cout << "  " << i_vals.at(i) << endl;
 	}
 
-	cout << "Printing N vals..." << endl;
-
 	unsigned int n_int_size = ceil(log2(n));
+	cout << "Printing N vals..." << endl;
+	cout << "  Total N size = " << n_int_size*n_partial_sums.size() << " bits." << endl;
+	
 	for (i=0; i<n_partial_sums.size(); i++) {
 		print_int(ofs, n_partial_sums.at(i), n_int_size);
 	}
 
 	cout << "Printing E Table pointers..." << endl;
-
+	cout << "  Total E Table pointer size = " << E_table_ptrs.size()*32 << " bits." << endl;
 	unsigned int total_g_table_depth = 0;
 	print_int (ofs, total_g_table_depth, 32);
 	for (i=0; i<E_table_ptrs.size(); i++) {
@@ -361,24 +357,25 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	}
 
 	cout << "Printing E Tables..." << endl;
-
+	unsigned int total_e_table_size = 0;
 	unsigned int e_table_rank_size = ceil(log2(u+1));
 	for (i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
 		for (unsigned int j=0; j<etable->entries.size(); j++) {
 			G_entry* entry = etable->entries.at(j);
 			// Output compressed code
-			cout << "Entry->sequence = " << entry->sequence << endl;
 			for (unsigned int k=0; k<u; k++) {
 				print_char(ofs, entry->sequence.at(k), 8);
-				cout << "  printing " << entry->sequence.at(k) << endl;
+				total_e_table_size += 8;
 			}
 			for(unsigned int k=0; k<entry->ranks.size(); k++) {
 				  //ofs.put(entry->ranks.at(k)); // log u bits
 				print_char(ofs, entry->ranks.at(k), e_table_rank_size);
+				total_e_table_size += e_table_rank_size;
 			}
 		}
 	}
+	cout << "  Total E Table size = " << total_e_table_size << " bits." << endl;
 
 	print_remainder(ofs);
 	ofs << rmdr;
@@ -668,11 +665,34 @@ E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
 	return table;
 }
 
-int main() {
+int main(int argc, char** argv) {
 
-	//NavarroSeq::compress("test-gen-data.txt",  "test-bitcompressed-out.txt");
-	NavarroSeq::decompress("test-bitcompressed-out.txt");
+	bool compress = false;
+	bool decompress = false;
 
+	string fileIn = "";
+	string fileOut = "";
+
+	if (argc > 1) {
+		if (strcmp("-compress", argv[1]) == 0) {
+			compress = true;
+			fileIn = argv[2];
+			fileOut = argv[3];
+		} 
+		else if (strcmp("-decompress", argv[1]) == 0) {
+			decompress = true;
+			fileIn = argv[2];
+		} else {
+			return 0;
+		}
+	}
+
+	if (compress) {
+		NavarroSeq::compress(fileIn,  fileOut);
+	}
+	else if (decompress) {
+		NavarroSeq::decompress(fileIn);
+	}
 /*
 	unsigned int testint = 42;
 	std::ofstream ofs("test-byte-compression.txt");
