@@ -20,13 +20,14 @@ public:
 	static unsigned int rank(string fname, char c, int index);
 	static unsigned int select(string fname, char c, int index);
 	static unsigned int get_size(string fname);
-
-private:
-	NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet);
+	NavarroSeq(std::ifstream & ifs);
+	string parse_input_data(std::ifstream & ifs, string r_fname, string i_fname, string l_fname, string n_fname);
+	void print_header(std::ofstream & ofs);
+	void print_E_table_info(std::ofstream & ofs);
 	static vector<vector<unsigned int> > get_all_combinations(size_t r, size_t u);
 	static void enumerate(vector<unsigned int>& values, vector<vector<unsigned int> >& combos, unsigned int min, unsigned int r, unsigned int u);
-	void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table);
-	E_table* get_etable(vector<unsigned int> combination);
+	//void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table);
+	//E_table* get_etable(vector<unsigned int> combination);
 };
 
 # endif

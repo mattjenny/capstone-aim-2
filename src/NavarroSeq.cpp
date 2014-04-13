@@ -15,13 +15,35 @@ using namespace std;
 int BYTE_SIZE = 8;
 int NUM_BYTES_IN_INT = 4;
 
-size_t nseq_n, nseq_r, nseq_u;
-vector<char> nseq_alphabet;
+/*
+* n is the length of the full sequence s
+* r is the number of characters in the alphabet
+* u is the block size
+* num_blocks is the number of u-length blocks in the sequence
+*/
+size_t n,r,u,num_blocks;
+vector<char> alphabet;
+vector<vector<unsigned int> > combinations;
+vector<E_table*> E_table_ptrs; // Mapping from R index to E table
+vector<unsigned int> curr_combination;
+unsigned int large_block_size;
+
+
+//Element bit sizes
+unsigned int r_int_size;
+unsigned int full_l_int_size;
+unsigned int relative_l_int_size;
+unsigned int n_int_size;
 
 union {
 	unsigned int integer;
 	char byte[4];
 } four_byte_union;
+
+typedef struct {
+	unsigned int value;
+	unsigned int bits;
+} L_val;
 
 unsigned char on_deck = 0x00;
 int num_bits_on_deck = 0;
@@ -135,43 +157,109 @@ void print_remainder(std::ofstream & ofs) {
 **************************************** END HELPER METHODS TO HANDLE BITWISE I/O *************************************************
 **********************************************************************************************************************************/
 
-// Private constructor: instances used internally only
-NavarroSeq::NavarroSeq(size_t n, size_t r, size_t u, list<char> alphabet) 
+/**********************************************************************************************************************************
+**************************************** Helper Methods Created Before 4.13.2014 **************************************************
+**********************************************************************************************************************************/
+
+vector<vector<unsigned int> > NavarroSeq::get_all_combinations(size_t r, size_t u) // r is alphabet size; u is block size
 {
-	nseq_n = n;
-	nseq_r = r;
-	nseq_u = u;
-	for (list<char>::iterator it = alphabet.begin(); it != alphabet.end(); ++it) {
-		nseq_alphabet.push_back(*it);
+	unsigned int i;
+	vector<vector<unsigned int> > combinations; // store a list of all combinations
+
+	for (i = 0; i<r; i++)
+	{
+		/*
+		* Create a vector of counts for each character
+		* Vector of length r
+		* values[0] has counts for alphabet[0], values[1] for alphabet[1]...
+		*/
+		vector<unsigned int> values (r,0);
+		values.at(i)++; // Set initial count to current character
+		enumerate(values, combinations, i, r, u-1); // add all enumerations with this prefix
+	}
+	return combinations;
+}
+
+void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned int> >& combos, unsigned int min, unsigned int r, unsigned int u)
+{
+	if (u <= 0) //We already have a sequence of length u
+	{
+		combos.push_back(values); // Add it to the list
+		return;
+	}
+	else
+	{
+		unsigned int i;
+		for (i = min; i<r; i++) // iterate through all possible characters >= prefix
+		{
+			vector<unsigned int> values_copy (values);
+			values_copy.at(i)++;
+			enumerate(values_copy, combos, i, r, u-1);
+		}
 	}
 }
 
-void NavarroSeq::compress(string in_fname, string out_fname)
+void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table)
 {
-	cout << "Beginning compression..." << endl;
-	/*
-	* n is the length of the full sequence s
-	* r is the number of characters in the alphabet
-	* u is the block size
-	* num_blocks is the number of u-length blocks in the sequence
-	* i,j,k are counters used throughout this method
-	*/
-	size_t n,r,u,num_blocks,i,j,k;
+	unsigned int i,j,combination_sum = 0;
+	for (i=0; i<combination.size(); i++) {
+		combination_sum += combination.at(i);
+	}
+	if (combination_sum == 0) {
+		G_entry* entry = new G_entry(prefix, ranks);
+		table->add_entry(entry);
+	}
+	
+	for (i=0; i<combination.size(); i++) {
+		if(combination.at(i) == 0) continue;
+		string next_prefix = prefix + alphabet.at(i);
+		vector<unsigned int> remaining_combo (combination);
+		remaining_combo.at(i)--;
+		for (j=i*u + prefix.length(); j<(i+1)*u; j++) {
+			ranks.at(j)++;
+		}
+		get_etable_rows(next_prefix, ranks, remaining_combo, table);
+	}
+}
 
-	std::ifstream ifs (in_fname);
+E_table* get_etable(vector<unsigned int> combination)
+{
+	E_table* table = new E_table();
+	unsigned int i,j;
+	for (i=0; i<combination.size(); i++) {
+		if(combination.at(i) == 0) continue;
+		string prefix = "";
+		prefix += alphabet.at(i);
+		vector<char> ranks (r*u, 0);
+		vector<unsigned int> remaining_combo (combination);
+		remaining_combo.at(i)--;
+		for (j=i*u; j<(i+1)*u; j++) {
+			ranks.at(j)++;
+		}
+		get_etable_rows(prefix, ranks, remaining_combo, table);
+	}
+	return table;
+}
 
-	// Get file size:
+/**********************************************************************************************************************************
+************************************ End Helper Methods Created Before 4.13.2014 **************************************************
+**********************************************************************************************************************************/
+
+/**********************************************************************************************************************************
+**************************************** Compression Helper Methods 4.13.2014 *****************************************************
+**********************************************************************************************************************************/
+
+size_t get_filesize(std::ifstream & ifs) {
 	ifs.seekg(0, ifs.end);
-	n = ifs.tellg();
+	size_t fsize = ifs.tellg();
 	ifs.seekg(0, ifs.beg);
+	return fsize;
+}
 
-	cout << "Determining alphabet..." << endl;
-
-	int percent_complete = 0;
-
-	// Figure out the alphabet that this sequence uses
+unordered_set<char> get_unique_chars(std::ifstream & ifs) {
+	unsigned int percent_complete = 0;
 	unordered_set<char> unique_chars;
-	for (i=0; i<n; i++) {
+	for (size_t i=0; i<n; i++) {
 		if ((((float)i)/n)*100 > percent_complete + 1) {
 			cout << "Alphabet " << percent_complete << "%% complete..." << endl;
 			percent_complete++;
@@ -179,203 +267,252 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 		unique_chars.insert(ifs.get());
 	}
 	ifs.seekg(0, ifs.beg);
-	r = unique_chars.size();
+	return unique_chars;
+}
 
-	cout << "Sorting alphabet..." << endl;
+vector<char> get_sorted_alphabet(std::ifstream & ifs) {
+	int percent_complete = 0;
 
-	// Sort the alphabet
+	// Figure out the alphabet that this sequence uses
+	unordered_set<char> unique_chars = get_unique_chars(ifs);
+
+	// Copy unique characters to a list and sort
 	list<char> alphabet;
 	for(unordered_set<char>::iterator set_it = unique_chars.begin(); set_it != unique_chars.end(); ++set_it) {
 		alphabet.push_back(*set_it);
 	}
 	alphabet.sort();
 
-	// Calculate block length u and number of blocks
-	u = floor(0.5*log2((double) n)/log2((double) r));
-	if (u <= 0) u = 1; //block size must be positive
-	num_blocks = floor((n+0.0)/u);
-
-	cout << "Creating helper object..." << endl;
-
-	// Create private instance of NavarroSeq
-	NavarroSeq* nseq = new NavarroSeq(n, r, u, alphabet);
-	
-	// Enumerate and index all possible COMBINATIONS of alphabet characters
-	vector<vector<unsigned int> > combinations = get_all_combinations(unique_chars.size(), u);
-
-	cout << "Creating E Tables..." << endl;
-
-	//Create E tables:
-	vector<E_table*> E_table_ptrs; // Mapping from R index to E table
-	for (i=0; i<combinations.size(); i++) {
-		// Create E table for R[i]
-		E_table* etable = nseq->get_etable(combinations.at(i));
-		E_table_ptrs.push_back(etable);
+	// Now copy sorted list into a vector to allow indexed access.  Not efficient, but it gets the job done.
+	vector<char> nseq_alphabet;
+	for (list<char>::iterator it = alphabet.begin(); it != alphabet.end(); ++it) {
+		nseq_alphabet.push_back(*it);
 	}
+	return nseq_alphabet;
+}
 
-	cout << "Creating other vectors..." << endl;
+string get_next_block(std::ifstream & ifs) {
+	char data[u+1];
+	ifs.read(data, u);
+	data[u] = 0x00;
+	string current_block (data);
+	return current_block;
+}
 
-	/*
-	* r_vals: the fixed-length Ri identifiers for the combination of each block i
-	* i_vals: the variable-length Ii identifiers for the permutation of each block i
-	* l_partial_sums: the sum of I encoding lengths up to block i
-	* n_partial_sums: the sum of character counts for each character up to block i
-	*/
-	cout << "Initializing r_vals vector..." << endl;
-	vector<unsigned int> r_vals (num_blocks, 0); //Note: using unsigned int wastes space!
-	cout << "Initializing i_vals vector..." << endl;
-	vector<unsigned int> i_vals (num_blocks, 0); //Note: using unsigned int wastes space!
-	cout << "Initializing l_partial_sums vector..." << endl;
-	vector<unsigned int> l_partial_sums (num_blocks+1, 0); //NOT exactly the definiteion from Navarro; num G entries
-	cout << "Initializing n_partial_sums vector..." << endl;
-	vector<unsigned int> n_partial_sums ((num_blocks+1)*r, 0); // 2-D: blocks and chars
-	cout << "Done initializing vectors." << endl;
-	l_partial_sums.push_back(0);
-
-	percent_complete = 0;
-
-	unsigned int curr_r_index, curr_i_index, curr_l;
-	for (i=0; i<num_blocks; i++) { //Iterate over every full block
-		if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
-			cout << "Compression " << percent_complete << "%% complete..." << endl;
-			percent_complete++;
-		}
-		//current_block = s.substr(i*u, u);
-		char data[u+1];
-		ifs.read(data, u);
-		data[u] = 0x00;
-		string current_block (data);
-
-		// Inefficient: we don't really care about compression efficiency, but this could be better
-		// Figure out which index in R this is
-		vector<unsigned int> curr_combination (r,0); // Tranform string into character vector
-		for (j=0; j<current_block.length(); j++) {
-			for (k=0; k<r; k++) {
-				if (current_block.at(j) == nseq_alphabet.at(k)) {
-					curr_combination.at(k)++;
-					break;
-				}
-			}
-		}
-		for (j=0; j<combinations.size(); j++) {
-			bool is_match = true;
-			for (k=0; k<r; k++) {
-				if (curr_combination.at(k) != combinations.at(j).at(k)) {
-					is_match = false;
-					break;
-				}
-			}
-			if (is_match) {
-				r_vals.at(i) = j;
-				curr_r_index = j;
-				break;
-			}
-		}
-
-		// Next, find permutation Ii
-		E_table* table = E_table_ptrs.at(curr_r_index);
-		curr_l = ceil(log2(table->entries.size()));
-		l_partial_sums.at(i+1) = (l_partial_sums.at(i) + curr_l);
-
-		for (j=0; j<table->entries.size(); j++) {
-			G_entry* entry = table->entries.at(j);
-			if(current_block.compare(entry->sequence) == 0) {
-				i_vals.at(i) = j;
-				// update n_partial_sums:
-				for (k=0; k<r; k++) {
-					n_partial_sums.at((i+1)*r+k) = n_partial_sums.at(i*r+k) + curr_combination.at(k);
-				}
+unsigned int get_r_index(string block) {
+	// Inefficient: we don't really care about compression efficiency, but this could be better
+	// Figure out which index in R this is
+	vector<unsigned int> current_combo (r,0); // Tranform string into character vector
+	curr_combination = current_combo;
+	size_t j,k;
+	for (j=0; j<block.length(); j++) {
+		for (k=0; k<r; k++) {
+			if (block.at(j) == alphabet.at(k)) {
+				curr_combination.at(k)++;
 				break;
 			}
 		}
 	}
+	for (j=0; j<combinations.size(); j++) {
+		bool is_match = true;
+		for (k=0; k<r; k++) {
+			if (curr_combination.at(k) != combinations.at(j).at(k)) {
+				is_match = false;
+				break;
+			}
+		}
+		if (is_match) {
+			return j;
+		}
+	}
+	return 0; // should add an error check here
+}
 
-	cout << "Computing remainder..." << endl;
+unsigned int get_i_index(E_table* table, string block) {
+	for (size_t j=0; j<table->entries.size(); j++) {
+		G_entry* entry = table->entries.at(j);
+		if(block.compare(entry->sequence) == 0) {
+			return j;
+		}
+	}
 
-	// Now for the remainder that didn't fit into a block:
-	unsigned int rmdr_length = n%u;
-	char data[rmdr_length+1];
-	ifs.read(data, rmdr_length);
-	data[rmdr_length] = 0x00;
-	string rmdr (data);
+	return 0; //should do error checking here
+}
 
-	cout << "Opening output filestream..." << endl;
-
-	std::ofstream ofs(out_fname);
-
+void NavarroSeq::print_header(std::ofstream & ofs) {
 	print_int(ofs, n, 32);
 	print_int(ofs, r, 32);
 	print_int(ofs, u, 32);
 	print_int(ofs, num_blocks, 32);
 	print_int(ofs, combinations.size(), 32);
 
-	cout << "Printing alphabet..." << endl;
-
-	for (list<char>::iterator alphabet_it = alphabet.begin(); alphabet_it != alphabet.end(); ++alphabet_it) {
-		//ofs.put(*alphabet_it);
+	for (vector<char>::iterator alphabet_it = alphabet.begin(); alphabet_it != alphabet.end(); ++alphabet_it) {
 		print_char(ofs, *alphabet_it, 8);
 	}
+}
 
-	unsigned int r_int_size = ceil(log2(combinations.size()));
-	cout << "Printing R vals with " << r_int_size << " bits... " << combinations.size() << " possible combos." << endl;
-	cout << "  Total R size = " << r_int_size*r_vals.size() << " bits." << endl;
-	for (i=0; i<r_vals.size(); i++) {
-		print_int(ofs, r_vals.at(i), r_int_size);
-	}
-
-	unsigned int l_int_size = ceil(log2(n*log2(r)));
-	cout << "Printing L vals with " << l_int_size << " bits..." << endl;
-	cout << "  Total L size = " << l_int_size*(num_blocks+1) << " bits." << endl;
-	for (i=0; i<num_blocks+1; i++) {
-	  	print_int(ofs, l_partial_sums.at(i), l_int_size);
-	}
-	
-	cout << "Printing I vals..." << endl;
-	cout << "  Total I size = " << l_partial_sums.at(num_blocks) << " bits." << endl;
-	unsigned int current_i_size;
-	for (i=0; i<i_vals.size(); i++) {
-		current_i_size = l_partial_sums.at(i+1) - l_partial_sums.at(i);
-	  	print_int(ofs, i_vals.at(i), current_i_size);
-	}
-
-	unsigned int n_int_size = ceil(log2(n));
-	cout << "Printing N vals..." << endl;
-	cout << "  Total N size = " << n_int_size*n_partial_sums.size() << " bits." << endl;
-	
-	for (i=0; i<n_partial_sums.size(); i++) {
-		print_int(ofs, n_partial_sums.at(i), n_int_size);
-	}
-
-	cout << "Printing E Table pointers..." << endl;
-	cout << "  Total E Table pointer size = " << E_table_ptrs.size()*32 << " bits." << endl;
+void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 	unsigned int total_g_table_depth = 0;
 	print_int (ofs, total_g_table_depth, 32);
-	for (i=0; i<E_table_ptrs.size(); i++) {
+	for (size_t i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
 		total_g_table_depth += etable->entries.size();
 		print_int(ofs, total_g_table_depth, 32);
 	}
 
-	cout << "Printing E Tables..." << endl;
-	unsigned int total_e_table_size = 0;
+	//unsigned int total_e_table_size = 0;
 	unsigned int e_table_rank_size = ceil(log2(u+1));
-	for (i=0; i<E_table_ptrs.size(); i++) {
+	for (size_t i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
 		for (unsigned int j=0; j<etable->entries.size(); j++) {
 			G_entry* entry = etable->entries.at(j);
 			// Output compressed code
 			for (unsigned int k=0; k<u; k++) {
 				print_char(ofs, entry->sequence.at(k), 8);
-				total_e_table_size += 8;
+				//total_e_table_size += 8;
 			}
 			for(unsigned int k=0; k<entry->ranks.size(); k++) {
 				  //ofs.put(entry->ranks.at(k)); // log u bits
 				print_char(ofs, entry->ranks.at(k), e_table_rank_size);
-				total_e_table_size += e_table_rank_size;
+				//total_e_table_size += e_table_rank_size;
 			}
 		}
 	}
-	cout << "  Total E Table size = " << total_e_table_size << " bits." << endl;
+}
+
+string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string i_fname, string l_fname, string n_fname) {
+	
+	unsigned int percent_complete, current_r, current_i, current_l, current_l_size, current_i_size, prev_l, last_full_l_sum = 0;
+	vector<unsigned int> prev_n(r, 0);
+	vector<unsigned int> last_full_n_sum(r, 0);
+
+	std::ofstream ofs_r_vals(r_fname, std::ofstream::out);
+	std::ofstream ofs_i_vals(i_fname, std::ofstream::out);
+	std::ofstream ofs_l_vals(l_fname, std::ofstream::out);
+	std::ofstream ofs_n_vals(n_fname, std::ofstream::out);
+
+	for (size_t i=0; i<num_blocks; i++) { //Iterate over every full block
+		if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
+			cout << "Compression " << percent_complete << "%% complete..." << endl;
+			percent_complete++;
+		}
+
+		string current_block = get_next_block(ifs);
+		current_r = get_r_index(current_block);
+		E_table* table = E_table_ptrs.at(current_r);
+		current_i = get_i_index(table, current_block);
+
+		print_int(ofs_r_vals, current_r, r_int_size);
+		print_int(ofs_i_vals, current_i, current_i_size);
+
+		/*
+		* L and N partial sums are a bit trickier.  If this sequence begins a new L and N 'superblock', we store the full partial sums.
+		* Otherwise, we store just the relative sum since the beginning of the current 'superblock'.
+		*/
+		current_i_size = ceil(log2(table->entries.size()));		
+		if (i % large_block_size == 0) {
+			current_l = (prev_l + current_i_size + last_full_l_sum);
+			
+			print_int(ofs_l_vals, current_l, full_l_int_size);
+			for (size_t j=0; j<r; j++) {
+				unsigned int current_n = last_full_n_sum.at(j) + prev_n.at(j) + curr_combination.at(j);
+				print_int(ofs_n_vals, current_n, full_l_int_size);
+				last_full_n_sum.at(j) = current_n;
+				prev_n.at(j) = 0;
+			}
+
+			last_full_l_sum = current_l;
+			prev_l = 0;
+		} else {
+			current_l = (prev_l + current_i_size);
+			
+			print_int(ofs_l_vals, current_l, relative_l_int_size);
+			for (size_t j=0; j<r; j++) {
+				unsigned int current_n = prev_n.at(j) + curr_combination.at(j);
+				print_int(ofs_n_vals, current_n, relative_l_int_size);
+				prev_n.at(j) = current_n;
+			}
+			
+			prev_l = current_l;
+		}
+	}
+
+	unsigned int rmdr_length = n%u;
+	char data[rmdr_length+1];
+	ifs.read(data, rmdr_length);
+	data[rmdr_length] = 0x00;
+	string rmdr (data);
+
+	ofs_r_vals.close();
+	ofs_i_vals.close();
+	ofs_l_vals.close();
+	ofs_n_vals.close();
+
+	return rmdr;
+}
+
+void init(std::ifstream & ifs) {
+
+	n = get_filesize(ifs);
+	alphabet = get_sorted_alphabet(ifs);
+	r = alphabet.size();
+	u = floor(0.5*log2((double) n)/log2((double) r));
+	
+	if (u <= 0) u = 1; //block size must be positive
+	num_blocks = floor(((double)n)/u);
+	
+	// Enumerate and index all possible COMBINATIONS of alphabet characters
+	combinations = NavarroSeq::get_all_combinations(r, u);
+
+	//Create E tables:
+	for (size_t i=0; i<combinations.size(); i++) {
+		// Create E table for R[i]
+		E_table* etable = get_etable(combinations.at(i));
+		E_table_ptrs.push_back(etable);
+	}
+
+	// Calculate bit sizes of each compressed element:
+	r_int_size = ceil(log2(combinations.size()));
+	large_block_size = ceil(log2(n*log2(r)));
+	full_l_int_size = ceil(log2(n*log2(r)));
+	relative_l_int_size = ceil(log2(n*log2(r)));
+	n_int_size = ceil(log2(n));
+}
+
+/**********************************************************************************************************************************
+************************************ End Compression Helper Methods 4.13.2014 *****************************************************
+**********************************************************************************************************************************/
+
+// Private constructor: instances used internally only
+NavarroSeq::NavarroSeq(std::ifstream & ifs) 
+{
+	init(ifs);
+}
+
+void NavarroSeq::compress(string in_fname, string out_fname)
+{
+
+	std::ifstream ifs (in_fname);
+	// Create private instance of NavarroSeq
+	NavarroSeq* nseq = new NavarroSeq(ifs);
+
+	string rfile = "temp_r_file";
+	string ifile = "temp_i_file";
+	string lfile = "temp_l_file";
+	string nfile = "temp_n_file";
+
+	string rmdr = nseq->parse_input_data(ifs, rfile, ifile, lfile, nfile);
+	std::ofstream ofs(out_fname);
+	nseq->print_header(ofs);
+
+	std::ifstream ifs_r(rfile, std::ios_base::binary);
+	std::ifstream ifs_i(ifile, std::ios_base::binary);
+	std::ifstream ifs_l(lfile, std::ios_base::binary);
+	std::ifstream ifs_n(nfile, std::ios_base::binary);
+
+	ofs << ifs_r.rdbuf() << ifs_i.rdbuf() << ifs_l.rdbuf() << ifs_n.rdbuf();
+
+	nseq->print_E_table_info(ofs);
 
 	print_remainder(ofs);
 	ofs << rmdr;
@@ -385,7 +522,7 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 
 string NavarroSeq::decompress(string filename)
 {
-
+	/*
 	std::ifstream ifs (filename, std::ifstream::in);
 
 	unsigned int i,j,k;
@@ -492,10 +629,13 @@ string NavarroSeq::decompress(string filename)
 	cout << "DECOMPRESSED STRING = " << s << rmdr << endl;
 	
 	return s;
+	*/
+	return "Hai!";
 }
 
 char NavarroSeq::access(string fname, int index)
 {
+	/*
 	std::ifstream ifs (fname, std::ifstream::in);
 
 	unsigned int i,j,k;
@@ -527,11 +667,13 @@ char NavarroSeq::access(string fname, int index)
 	char retval = ifs.get();
 
 	return retval;
+	*/
+	return 0x00;
 }
 
 unsigned int NavarroSeq::rank(string fname, char c, int index)
 {
-
+	/*
 	std::ifstream ifs (fname, std::ifstream::in);
 
 	unsigned int char_index_in_alphabet = 0; // hard coded for now
@@ -572,7 +714,8 @@ unsigned int NavarroSeq::rank(string fname, char c, int index)
 	//cout << "RANK for index " << index << " = " << n_partial_sum << " + " << (int)block_rank << " = " << rank << endl;
 
 	return rank;
-
+	*/
+	return 4;
 }
 
 unsigned int NavarroSeq::select(string fname, char c, int index)
@@ -583,86 +726,6 @@ unsigned int NavarroSeq::select(string fname, char c, int index)
 unsigned int NavarroSeq::get_size(string fname) {
 	std::ifstream ifs (fname, std::ifstream::in);
 	return get_int(ifs, 32);
-}
-
-vector<vector<unsigned int> > NavarroSeq::get_all_combinations(size_t r, size_t u) // r is alphabet size; u is block size
-{
-	unsigned int i;
-	vector<vector<unsigned int> > combinations; // store a list of all combinations
-
-	for (i = 0; i<r; i++)
-	{
-		/*
-		* Create a vector of counts for each character
-		* Vector of length r
-		* values[0] has counts for alphabet[0], values[1] for alphabet[1]...
-		*/
-		vector<unsigned int> values (r,0);
-		values.at(i)++; // Set initial count to current character
-		enumerate(values, combinations, i, r, u-1); // add all enumerations with this prefix
-	}
-	return combinations;
-}
-
-void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned int> >& combos, unsigned int min, unsigned int r, unsigned int u)
-{
-	if (u <= 0) //We already have a sequence of length u
-	{
-		combos.push_back(values); // Add it to the list
-		return;
-	}
-	else
-	{
-		unsigned int i;
-		for (i = min; i<r; i++) // iterate through all possible characters >= prefix
-		{
-			vector<unsigned int> values_copy (values);
-			values_copy.at(i)++;
-			enumerate(values_copy, combos, i, r, u-1);
-		}
-	}
-}
-
-void NavarroSeq::get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table)
-{
-	unsigned int i,j,combination_sum = 0;
-	for (i=0; i<combination.size(); i++) {
-		combination_sum += combination.at(i);
-	}
-	if (combination_sum == 0) {
-		G_entry* entry = new G_entry(prefix, ranks);
-		table->add_entry(entry);
-	}
-	
-	for (i=0; i<combination.size(); i++) {
-		if(combination.at(i) == 0) continue;
-		string next_prefix = prefix + nseq_alphabet.at(i);
-		vector<unsigned int> remaining_combo (combination);
-		remaining_combo.at(i)--;
-		for (j=i*nseq_u + prefix.length(); j<(i+1)*nseq_u; j++) {
-			ranks.at(j)++;
-		}
-		get_etable_rows(next_prefix, ranks, remaining_combo, table);
-	}
-}
-
-E_table* NavarroSeq::get_etable(vector<unsigned int> combination)
-{
-	E_table* table = new E_table();
-	unsigned int i,j;
-	for (i=0; i<combination.size(); i++) {
-		if(combination.at(i) == 0) continue;
-		string prefix = "";
-		prefix += nseq_alphabet.at(i);
-		vector<char> ranks (nseq_r*nseq_u, 0);
-		vector<unsigned int> remaining_combo (combination);
-		remaining_combo.at(i)--;
-		for (j=i*nseq_u; j<(i+1)*nseq_u; j++) {
-			ranks.at(j)++;
-		}
-		get_etable_rows(prefix, ranks, remaining_combo, table);
-	}
-	return table;
 }
 
 int main(int argc, char** argv) {
