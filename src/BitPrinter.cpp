@@ -58,6 +58,6 @@ void BitPrinter::print_int(unsigned int integer, unsigned int num_bits) {
 	} 
 }
 
-int main() {
-	return 0;
+void BitPrinter::print_remainder() {
+	ofs->put(on_deck);
 }

@@ -1,4 +1,6 @@
 #include "NavarroSeq.h"
+#include "BitPrinter.h"
+#include "BitReader.h"
 #include <string>
 #include <math.h>
 #include <unordered_set>
@@ -51,6 +53,7 @@ int num_bits_on_deck = 0;
 /**********************************************************************************************************************************
 **************************************** HELPER METHODS TO HANDLE BITWISE I/O *****************************************************
 **********************************************************************************************************************************/
+
 
 void print_char(std::ofstream & ofs, char c_in, unsigned int num_bits) {
 	unsigned char c = (unsigned char) c_in;
@@ -397,7 +400,7 @@ void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 
 string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string i_fname, string l_fname, string n_fname) {
 	
-	unsigned int percent_complete, current_r, current_i, current_l, current_l_size, current_i_size, prev_l, last_full_l_sum = 0;
+	unsigned int percent_complete=0, current_r=0, current_i=0, current_l=0, current_l_size=0, current_i_size=0, prev_l=0, last_full_l_sum = 0;
 	vector<unsigned int> prev_n(r, 0);
 	vector<unsigned int> last_full_n_sum(r, 0);
 
@@ -405,6 +408,11 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 	std::ofstream ofs_i_vals(i_fname, std::ofstream::out);
 	std::ofstream ofs_l_vals(l_fname, std::ofstream::out);
 	std::ofstream ofs_n_vals(n_fname, std::ofstream::out);
+
+	BitPrinter r_printer(&ofs_r_vals);
+	BitPrinter i_printer(&ofs_i_vals);
+	BitPrinter l_printer(&ofs_l_vals);
+	BitPrinter n_printer(&ofs_n_vals);
 
 	for (size_t i=0; i<num_blocks; i++) { //Iterate over every full block
 		if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
@@ -418,9 +426,9 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 		current_i = get_i_index(table, current_block);
 		current_i_size = ceil(log2(table->entries.size()));
 		
-		cout << "R(" << i << ") = " << current_r << " with " << r_int_size << " bits." << endl;
-		print_int(ofs_r_vals, current_r, r_int_size);
-		print_int(ofs_i_vals, current_i, current_i_size);
+		//cout << "R(" << i << ") = " << current_r << " with " << r_int_size << " bits." << endl;
+		r_printer.print_int(current_r, r_int_size);
+		i_printer.print_int(current_i, current_i_size);
 
 		/*
 		* L and N partial sums are a bit trickier.  If this sequence begins a new L and N 'superblock', we store the full partial sums.
@@ -428,11 +436,11 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 		*/
 		if (i % large_block_size == 0) {
 			current_l = (prev_l + current_i_size + last_full_l_sum);
-			//cout << "L(" << i << ") = " << current_l << " with " << full_l_int_size << " bits." << endl;
-			print_int(ofs_l_vals, current_l, full_l_int_size);
+			cout << "L(" << i << ") = " << current_l << " with " << full_l_int_size << " bits." << endl;
+			l_printer.print_int(current_l, full_l_int_size);
 			for (size_t j=0; j<r; j++) {
 				unsigned int current_n = last_full_n_sum.at(j) + prev_n.at(j) + curr_combination.at(j);
-				print_int(ofs_n_vals, current_n, full_l_int_size);
+				n_printer.print_int(current_n, 4);
 				last_full_n_sum.at(j) = current_n;
 				prev_n.at(j) = 0;
 			}
@@ -441,11 +449,11 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 			prev_l = 0;
 		} else {
 			current_l = (prev_l + current_i_size);
-			//cout << "L(" << i << ") = " << current_l << " with " <<  relative_l_int_size << " bits." << endl;
-			print_int(ofs_l_vals, current_l, relative_l_int_size);
+			cout << "L(" << i << ") = " << current_l << " with " <<  relative_l_int_size << " bits." << endl;
+			l_printer.print_int(current_l, relative_l_int_size);
 			for (size_t j=0; j<r; j++) {
 				unsigned int current_n = prev_n.at(j) + curr_combination.at(j);
-				print_int(ofs_n_vals, current_n, relative_l_int_size);
+				n_printer.print_int(current_n, 4);
 				prev_n.at(j) = current_n;
 			}
 			
@@ -491,7 +499,7 @@ void init(std::ifstream & ifs) {
 	r_int_size = ceil(log2(combinations.size()));
 	large_block_size = ceil(log2(n*log2(r)));
 	full_l_int_size = ceil(log2(n*log2(r)));
-	relative_l_int_size = ceil(log2(n*log2(r)));
+	relative_l_int_size = ceil(log2(u * ceil(log2(r)) * ceil(log2(n*log2(r)))));
 	n_int_size = ceil(log2(n));
 }
 
@@ -575,7 +583,13 @@ string NavarroSeq::decompress(string filename)
 		cout << "i = " << i << "; R = " << r_vals.at(i) << endl;
 	}
 
-	flush_remainder();	
+	/*
+	for(i=0; i<10; i++) {
+		unsigned char c = (unsigned char) ifs.get();
+		printf("CHAR = %02x\n", c);
+	}
+	*/
+
 	// Populate l_partial_sums
 	cout << "L partial sums:" << endl;
 	//unsigned int l_int_size = ceil(log2(n*log2(r)));
@@ -589,11 +603,11 @@ string NavarroSeq::decompress(string filename)
 		if (i % large_block_size == 0) {
 			last_full_l_sum = get_int(ifs, full_l_int_size);
 			l_partial_sums.at(i) = last_full_l_sum;
-			cout << "L(" << i << ") = " << l_partial_sums.at(i) << endl;
+			cout << "L(" << i << ") = " << l_partial_sums.at(i) << "[" << full_l_int_size << "] bits." << endl;
 		} else {
 			unsigned int relative_sum = get_int(ifs, relative_l_int_size);
 			l_partial_sums.at(i) = relative_sum + last_full_l_sum;
-			cout << "L(" << i << ") = " << relative_sum << " + " << last_full_l_sum << " = " << l_partial_sums.at(i) << endl;
+			cout << "L(" << i << ") = " << relative_sum << " + " << last_full_l_sum << " = " << l_partial_sums.at(i) << "[" << relative_l_int_size << "] bits." << endl;
 		}
 	}
 

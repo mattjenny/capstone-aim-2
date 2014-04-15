@@ -7,9 +7,6 @@
 
 using namespace std;
 
-unsigned int BYTE_SIZE = 8;
-unsigned int NUM_BYTES_IN_INT = 4;
-
 BitReader::BitReader(std::ifstream * ifs_in) {
 	ifs = ifs_in;
 	on_deck = 0x00;
@@ -47,21 +44,22 @@ unsigned int BitReader::get_int(int num_bits) {
 		return 0;
 	}
 
-	for (int i=0; i<NUM_BYTES_IN_INT; i++) {
+	for (int i=0; i<4; i++) {
 		if ((3-i)*8 >= num_bits) {
 			four_byte_union.byte[3-i] = 0x00;
 		}
 		else if ((4-i)*8 <= num_bits) {
-			four_byte_union.byte[3-i] = get_char(BYTE_SIZE);
+			four_byte_union.byte[3-i] = get_char(8);
 		} 
 		else {
-			four_byte_union.byte[3-i] = get_char(num_bits % BYTE_SIZE);
+			four_byte_union.byte[3-i] = get_char(num_bits % 8);
 		}
 	}
 
 	return four_byte_union.integer;
 }
 
-int main() {
-	return 0;
+void BitReader::flush_remainder() {
+	on_deck = 0x00;
+	num_bits_on_deck = 0;
 }

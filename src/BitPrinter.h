@@ -14,6 +14,7 @@ public:
 	BitPrinter(std::ofstream * ofs_in);
 	void print_char(char c_in, unsigned int num_bits);
 	void print_int(unsigned int integer, unsigned int num_bits);
+	void print_remainder();
 private:
 	std::ofstream* ofs;
 	char on_deck;

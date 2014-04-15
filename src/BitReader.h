@@ -13,6 +13,7 @@ public:
 	BitReader(std::ifstream * ifs_in);
 	unsigned char get_char(int num_bits);
 	unsigned int get_int(int num_bits);	
+	void flush_remainder();
 private:
 	std::ifstream* ifs;
 	char on_deck;
