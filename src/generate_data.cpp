@@ -382,7 +382,7 @@ int main(int argc, char** argv)
   if(flag)
     freq = get_freq_file("frequencies.txt");
   else
-    freq =  get_frequencies(filename);
+    freq = get_frequencies(filename);
 
   cout << "Generating test data..." << endl;
 
