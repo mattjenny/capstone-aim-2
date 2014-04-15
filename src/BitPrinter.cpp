@@ -35,7 +35,7 @@ void BitPrinter::print_char(char c_in, unsigned int num_bits) {
 
 void BitPrinter::print_int(unsigned int integer, unsigned int num_bits) {
 	if (num_bits > 32) {
-		cout << "There aren't that many bits in an int." << endl;
+		cout << "There aren't " << num_bits << " bits in an int." << endl;
 		return;
 	} else if (num_bits == 0) {
 		return;
@@ -59,5 +59,5 @@ void BitPrinter::print_int(unsigned int integer, unsigned int num_bits) {
 }
 
 void BitPrinter::print_remainder() {
-	ofs->put(on_deck);
+	if (num_bits_on_deck > 0) ofs->put(on_deck);
 }

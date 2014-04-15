@@ -38,7 +38,7 @@ unsigned char BitReader::get_char(int num_bits) {
 
 unsigned int BitReader::get_int(int num_bits) {
 	if (num_bits > 32) {
-		cout << "There aren't that many bits in an int." << endl;
+		cout << "There aren't " << num_bits << " bits in an int." << endl;
 		return 0;
 	} else if (num_bits == 0) {
 		return 0;
