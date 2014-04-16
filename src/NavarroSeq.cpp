@@ -1,5 +1,5 @@
 #include "NavarroSeq.h"
-#include <string>
+#include <string.h>
 #include <math.h>
 #include <unordered_set>
 #include <stdio.h>
