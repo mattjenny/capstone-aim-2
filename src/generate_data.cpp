@@ -103,7 +103,7 @@ for(int i = 0; i < 9; i++)
 
       //cout << current;
       
-      if(i == count)
+      if(i > count)
 	{
 	  cout << count << endl;
 	  count = count+div;
@@ -198,6 +198,9 @@ for(int i = 0; i < 9; i++)
 	{
 	  window.clear();
 	}
+
+      if(window.size() > 19)
+	window.clear();
 
       //add current element to window
       window.append(1,current);
