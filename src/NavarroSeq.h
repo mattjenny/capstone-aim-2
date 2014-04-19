@@ -17,8 +17,7 @@ public:
 	static void compress(string in_fname, string out_fname);
 	static string decompress(string filename);
 	static char access(string fname, int index);
-	static unsigned int rank(string fname, char c, int index);
-	static unsigned int select(string fname, char c, int index);
+	static unsigned int rank(string fname, int index, char c);
 	static unsigned int get_size(string fname);
 	NavarroSeq(std::ifstream & ifs);
 	string parse_input_data(std::ifstream & ifs, string r_fname, string i_fname, string l_fname, string n_fname);
