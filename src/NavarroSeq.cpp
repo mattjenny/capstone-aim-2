@@ -23,7 +23,7 @@ int NUM_BYTES_IN_INT = 4;
 * u is the block size
 * num_blocks is the number of u-length blocks in the sequence
 */
-size_t n,r,u,num_blocks;
+long n,r,u,num_blocks;
 vector<char> alphabet;
 vector<vector<unsigned int> > combinations;
 vector<E_table*> E_table_ptrs; // Mapping from R index to E table
@@ -41,6 +41,11 @@ union {
 	unsigned int integer;
 	char byte[4];
 } four_byte_union;
+
+union {
+	unsigned long long_val;
+	char byte[8];
+} eight_byte_union;
 
 typedef struct {
 	unsigned int value;
@@ -79,16 +84,16 @@ void print_char(std::ofstream & ofs, char c_in, unsigned int num_bits) {
 	}
 }
 
-void print_int(std::ofstream & ofs, unsigned int integer, unsigned int num_bits) {
+void print_int(std::ofstream & ofs, unsigned long num, unsigned int num_bits) {
 
-	if (num_bits > 32) {
-		cout << "There aren't that many bits in an int." << endl;
+	if (num_bits > 64) {
+		cout << "There aren't that many bits in a long." << endl;
 		return;
 	} else if (num_bits == 0) {
 		return;
 	}
 
-	four_byte_union.integer = integer;
+	eight_byte_union.long_val = num;
 
 	char prev = on_deck;
 	char next = 0;
@@ -98,10 +103,10 @@ void print_int(std::ofstream & ofs, unsigned int integer, unsigned int num_bits)
 	int mod_bits = num_bits % 8;
 	if (mod_bits == 0) mod_bits = 8;
 	int max_byte = (num_bits - 1)/8;
-	print_char(ofs, four_byte_union.byte[max_byte], mod_bits);
+	print_char(ofs, eight_byte_union.byte[max_byte], mod_bits);
 
 	for (i=max_byte - 1; i>=0; i--) {
-		print_char(ofs, four_byte_union.byte[i], 8);
+		print_char(ofs, eight_byte_union.byte[i], 8);
 	} 
 }
 
@@ -209,13 +214,11 @@ void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned 
 
 void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table)
 {
-	cout << "Getting E Table row" << endl;
 	unsigned int i,j,combination_sum = 0;
 	for (i=0; i<combination.size(); i++) {
 		combination_sum += combination.at(i);
 	}
 	if (combination_sum == 0) {
-		cout << "Adding G Entry for " << prefix << endl << endl;
 		G_entry* entry = new G_entry(prefix, ranks);
 		table->add_entry(entry);
 	}
@@ -226,15 +229,9 @@ void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> com
 		vector<unsigned int> remaining_combo (combination);
 		vector<char> current_ranks (ranks);
 		remaining_combo.at(i)--;
-		cout << " Prefix = " << prefix << endl << "  before: ";
-		for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
-		cout << endl;
 		for (j=i*u + prefix.length(); j<(i+1)*u; j++) {
 			current_ranks.at(j)++;
 		}
-		cout << "  after: ";
-		for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
-		cout << endl << endl;
 		get_etable_rows(next_prefix, current_ranks, remaining_combo, table);
 	}
 }
@@ -357,10 +354,10 @@ unsigned int get_i_index(E_table* table, string block) {
 }
 
 void NavarroSeq::print_header(std::ofstream & ofs) {
-	print_int(ofs, n, 32);
+	print_int(ofs, n, 64);
 	print_int(ofs, r, 32);
 	print_int(ofs, u, 32);
-	print_int(ofs, num_blocks, 32);
+	print_int(ofs, num_blocks, 64);
 	//cout << "NUM BLOCKS = " << num_blocks << endl;
 	print_int(ofs, combinations.size(), 32);
 	/*for (int i=0; i<combinations.size(); i++) {
@@ -379,13 +376,12 @@ void NavarroSeq::print_header(std::ofstream & ofs) {
 }
 
 void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
-	unsigned int total_g_table_depth = 0;
-	print_int (ofs, total_g_table_depth, 32);
+	unsigned long total_g_table_depth = 0;
+	print_int (ofs, total_g_table_depth, 64);
 	for (size_t i=0; i<E_table_ptrs.size(); i++) {
 		E_table* etable = E_table_ptrs.at(i);
 		total_g_table_depth += etable->entries.size();
-		print_int(ofs, total_g_table_depth, 32);
-		printf("^^^ E Table depth = %02x\n", total_g_table_depth);
+		print_int(ofs, total_g_table_depth, 64);
 		//cout << "G table depth[" << i+1 << "] = " << total_g_table_depth << endl;
 	}
 
@@ -400,10 +396,8 @@ void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 				print_char(ofs, entry->sequence.at(k), 8);
 				//total_e_table_size += 8;
 			}
-			cout << "SEQUENCE " << entry->sequence << endl;
 			for(unsigned int k=0; k<entry->ranks.size(); k++) {
 				  //ofs.put(entry->ranks.at(k)); // log u bits
-				printf("-->%02x\n",entry->ranks.at(k));
 				print_char(ofs, entry->ranks.at(k), e_table_rank_size);
 				//total_e_table_size += e_table_rank_size;
 			}
@@ -413,9 +407,10 @@ void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 
 string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string i_fname, string l_fname, string n_fname) {
 	
-	unsigned int percent_complete=0, current_r=0, current_i=0, current_l=0, current_l_size=0, current_i_size=0, prev_l=0, last_full_l_sum = 0, current_n=0;
-	vector<unsigned int> prev_n(r, 0);
-	vector<unsigned int> last_full_n_sum(r, 0);
+	unsigned int percent_complete=0, current_r=0, current_i=0,  current_l_size=0, current_i_size=0;
+	unsigned long prev_l=0, last_full_l_sum = 0, current_n=0, current_l=0;
+	vector<unsigned long> prev_n(r, 0);
+	vector<unsigned long> last_full_n_sum(r, 0);
 
 	std::ofstream ofs_r_vals(r_fname, std::ofstream::out);
 	std::ofstream ofs_i_vals(i_fname, std::ofstream::out);
@@ -428,14 +423,14 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 	BitPrinter n_printer(&ofs_n_vals);
 
 	l_printer.print_int(0, full_l_int_size);
-	for (size_t i=0; i<r; i++) {
+	for (long i=0; i<r; i++) {
 		n_printer.print_int(0, full_l_int_size);
 	}
 
-	for (size_t i=0; i<num_blocks; i++) { //Iterate over every full block
-		if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
-			percent_complete++;
-		}
+	for (long i=0; i<num_blocks; i++) { //Iterate over every full block
+		//if ((((float)i)/num_blocks)*100 > percent_complete + 1) {
+		//	percent_complete++;
+		//}
 
 		string current_block = get_next_block(ifs);
 		current_r = get_r_index(current_block);
@@ -574,10 +569,10 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	print_remainder(ofs);
 	ofs << rmdr;
 
-	remove("temp_r_file");
-	remove("temp_i_file");
-	remove("temp_l_file");
-	remove("temp_n_file");
+	//remove("temp_r_file");
+	//remove("temp_i_file");
+	//remove("temp_l_file");
+	//remove("temp_n_file");
 }
 
 string NavarroSeq::decompress(string filename)

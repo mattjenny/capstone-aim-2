@@ -13,16 +13,16 @@ class BitPrinter
 public:
 	BitPrinter(std::ofstream * ofs_in);
 	void print_char(char c_in, unsigned int num_bits);
-	void print_int(unsigned int integer, unsigned int num_bits);
+	void print_int(unsigned long integer, unsigned int num_bits);
 	void print_remainder();
 private:
 	std::ofstream* ofs;
 	char on_deck;
 	unsigned int num_bits_on_deck;
 	union {
-		unsigned int integer;
-		char byte[4];
-	} four_byte_union;
+		unsigned long long_val;
+		char byte[8];
+	} eight_byte_union;
 };
 
 #endif

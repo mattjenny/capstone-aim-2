@@ -33,15 +33,15 @@ void BitPrinter::print_char(char c_in, unsigned int num_bits) {
 	}
 }
 
-void BitPrinter::print_int(unsigned int integer, unsigned int num_bits) {
-	if (num_bits > 32) {
-		cout << "There aren't " << num_bits << " bits in an int." << endl;
+void BitPrinter::print_int(unsigned long integer, unsigned int num_bits) {
+	if (num_bits > 64) {
+		cout << "There aren't " << num_bits << " bits in a long." << endl;
 		return;
 	} else if (num_bits == 0) {
 		return;
 	}
 
-	four_byte_union.integer = integer;
+	eight_byte_union.long_val = integer;
 
 	char prev = on_deck;
 	char next = 0;
@@ -51,10 +51,10 @@ void BitPrinter::print_int(unsigned int integer, unsigned int num_bits) {
 	int mod_bits = num_bits % 8;
 	if (mod_bits == 0) mod_bits = 8;
 	int max_byte = (num_bits - 1)/8;
-	print_char(four_byte_union.byte[max_byte], mod_bits);
+	print_char(eight_byte_union.byte[max_byte], mod_bits);
 
 	for (i=max_byte - 1; i>=0; i--) {
-		print_char(four_byte_union.byte[i], 8);
+		print_char(eight_byte_union.byte[i], 8);
 	} 
 }
 
