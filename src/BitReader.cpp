@@ -32,6 +32,26 @@ BitReader::BitReader(std::ifstream * ifs_in) {
 	total_bytes_through_l = get_l_bytes();
 	total_bytes_through_i = get_i_bytes();
 	total_bytes_through_n = get_n_bytes();
+
+	cout << "*************" << endl;
+	cout << "n = " << n << endl;
+	cout << "r = " << r << endl;
+	cout << "u = " << u << endl;
+	cout << "number of blocks = " << num_blocks << endl;
+	cout << "number of combinations = " << num_combos << endl;
+	cout << " R bytes = " << total_bytes_through_r - HEADER_SIZE - r << endl;
+	cout << " I bytes = " << total_bytes_through_i - total_bytes_through_l << endl;
+	//cout << " L bytes = " << total_bytes_through_l - total_bytes_through_r << endl;
+	//cout << " N bytes = " << total_bytes_through_n - total_bytes_through_i << endl;
+
+	unsigned int num_superblocks = ((num_blocks - 1) / superblock_size);
+	unsigned int num_relative_blocks = num_blocks - num_superblocks;
+	cout << " L super bytes = " << ceil((num_superblocks*full_partial_sum_size)/8.0) << endl;
+	cout << " L rel bytes = " << ceil((num_relative_blocks*relative_partial_sum_size)/8.0) << endl;
+	cout << " N super bytes = " << ceil((num_superblocks*full_partial_sum_size)*r/8.0) << endl;
+	cout << " N rel bytes = " << ceil((num_relative_blocks*relative_partial_sum_size)*r/8.0) << endl;
+	cout << " #### Superblocks = " << num_superblocks << endl;
+	cout << " #### Rel = " << num_relative_blocks << endl;
 }
 
 unsigned char BitReader::get_char(int num_bits) {
@@ -104,7 +124,7 @@ unsigned int BitReader::get_r_bytes() {
 
 unsigned int BitReader::get_l_bytes() {
 	unsigned int num_r_bytes = total_bytes_through_r;
-	unsigned int num_superblocks = ((num_blocks - 1) / superblock_size) + 1;
+	unsigned int num_superblocks = ((num_blocks - 1) / superblock_size);
 	unsigned int num_relative_blocks = num_blocks - num_superblocks;
 	unsigned int num_l_bytes = ceil((num_superblocks*full_partial_sum_size + num_relative_blocks*relative_partial_sum_size)/8.0);
 	return num_r_bytes + num_l_bytes;
@@ -120,7 +140,7 @@ unsigned int BitReader::get_i_bytes() {
 unsigned int BitReader::get_n_bytes() {
 	unsigned int num_i_bytes = total_bytes_through_i;
 	unsigned int num_r_bytes = total_bytes_through_r;
-	unsigned int num_superblocks = ((num_blocks - 1) / superblock_size) + 1;
+	unsigned int num_superblocks = ((num_blocks - 1) / superblock_size);
 	unsigned int num_relative_blocks = num_blocks - num_superblocks;
 	unsigned int num_n_bytes = ceil((num_superblocks*full_partial_sum_size + num_relative_blocks*relative_partial_sum_size)*r/8.0);
 	return num_i_bytes + num_n_bytes;
@@ -167,18 +187,28 @@ unsigned int BitReader::get_l(unsigned int block)
 
 unsigned int BitReader::get_i(unsigned int block) 
 {
-	unsigned int num_l_bytes = total_bytes_through_l + 1;
-
+	unsigned int num_l_bytes = total_bytes_through_l + 3;
 	unsigned int prev_i_bits = get_l(block);
 	unsigned int current_i_size = get_l(block+1) - prev_i_bits;
+	cout << "READING " << get_l(block+1) << " - " << prev_i_bits << " = " << current_i_size << " characters; rmdr = " << prev_i_bits%8 << endl;
+	ifs->seekg(num_l_bytes + prev_i_bits/8);
+	get_int(prev_i_bits % 8);
+	for (int i=0; i<20; i++) {
+		printf("@@@@ %02x\n", ifs->get());
+	}
 	unsigned int retval = get_stored_int(num_l_bytes, prev_i_bits, current_i_size);
 	return retval;
 }
 
 unsigned int BitReader::get_n(unsigned int block, char c) 
 {
-	unsigned int previous_bytes = total_bytes_through_i + 1;
+	unsigned int previous_bytes = total_bytes_through_i + 2;
 	unsigned int char_index = get_char_index_in_alphabet(c);
+
+	ifs->seekg(previous_bytes-2);
+	for (int i=0; i<20; i++) {
+		printf("$$$$ %02x\n", ifs->get());
+	}
 
 	unsigned int num_bits_in_superblock = (full_partial_sum_size + (superblock_size-1)*relative_partial_sum_size)*r;
 	unsigned int superblock = block / superblock_size;
@@ -199,14 +229,20 @@ unsigned int BitReader::get_n(unsigned int block, char c)
 
 unsigned int BitReader::get_E_Table_depth(unsigned int r_val)
 {
-	unsigned int previous_bytes = total_bytes_through_n;
-	return get_stored_int(previous_bytes+4, r_val*32, 32);
+	unsigned int previous_bytes = total_bytes_through_n+10;
+	cout << "R Val = " << r_val << endl;
+	cout << "E Table Depth = " << get_stored_int(previous_bytes+8, r_val*32, 32) << endl;
+	ifs->seekg(previous_bytes);
+	for (int i=0; i<100; i++) {
+		printf("E  %02x\n", ifs->get());
+	}
+	return get_stored_int(previous_bytes, r_val*32, 32);
 }
 
 unsigned char BitReader::get_E_Table_char(unsigned int r_val, unsigned int i_val, unsigned int index) 
 {
 	unsigned int E_Table_depth = get_E_Table_depth(r_val);
-	unsigned int previous_bytes = total_bytes_through_n + 4*(num_combos+2);
+	unsigned int previous_bytes = total_bytes_through_n + 4*(num_combos+3);// WHY 3??  I don't know.  It's magic.
 	unsigned int previous_bits = (E_Table_depth + i_val)*((r * u)*e_table_rank_size + u*8) + 8*index;
 	unsigned char retval = (unsigned char) get_stored_int(previous_bytes, previous_bits, 8);
 	return retval;
@@ -216,9 +252,20 @@ unsigned int BitReader::get_E_Table_rank(unsigned int block, unsigned int r_val,
 {
 	unsigned int char_index = get_char_index_in_alphabet(c);
 	unsigned int E_Table_depth = get_E_Table_depth(r_val);
-	unsigned int previous_bytes = total_bytes_through_n + 4*(num_combos+2);
+	unsigned int previous_bytes = total_bytes_through_n + 4*(num_combos+3); // WHY 3??  I don't know.  It's magic.
 	unsigned int previous_bits = (E_Table_depth + i_val)*((r * u)*e_table_rank_size + u*8) + 8*u + (char_index*u + index)*e_table_rank_size;
+	cout << "each E table is " << u*8 << " + " << (r * u)*e_table_rank_size << " = " << ((r * u)*e_table_rank_size + u*8) << " bits." << endl;
+	cout << "There are " << E_Table_depth << " + " << i_val << " = " << (E_Table_depth + i_val) << " tables before this one." << endl;
+	cout << "Tack on " << 8*u << " bits for the sequence, " << char_index << "*" << u << "*" << e_table_rank_size << " = " << (char_index*u)*e_table_rank_size << " bits for other chars," << endl;
+	cout << "and " << index << "*" << e_table_rank_size << " = " << (index)*e_table_rank_size << " for indices skipped." << endl;
+	cout << " ===> " << previous_bits << endl;
+	ifs->seekg(previous_bytes + previous_bits/8 - 40);
+	for (int i=0; i<2000; i++) {
+		if (i == previous_bits/8) printf("---->");
+		printf("%d  %02x\n", i, ifs->get());
+	}
 	unsigned int block_rank = get_stored_int(previous_bytes, previous_bits, e_table_rank_size);
 	unsigned int n = get_n(block, c);
+	cout << "block rank = " << block_rank << "; n = " << n << endl;
 	return n + block_rank;
 }

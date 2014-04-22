@@ -42,6 +42,11 @@ union {
 	char byte[4];
 } four_byte_union;
 
+union {
+	unsigned long thelong;
+	char byte[8];
+} eight_byte_union;
+
 typedef struct {
 	unsigned int value;
 	unsigned int bits;
@@ -209,13 +214,13 @@ void NavarroSeq::enumerate(vector<unsigned int>& values, vector<vector<unsigned 
 
 void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> combination, E_table* table)
 {
-	cout << "Getting E Table row" << endl;
+	//cout << "Getting E Table row" << endl;
 	unsigned int i,j,combination_sum = 0;
 	for (i=0; i<combination.size(); i++) {
 		combination_sum += combination.at(i);
 	}
 	if (combination_sum == 0) {
-		cout << "Adding G Entry for " << prefix << endl << endl;
+		//cout << "Adding G Entry for " << prefix << endl << endl;
 		G_entry* entry = new G_entry(prefix, ranks);
 		table->add_entry(entry);
 	}
@@ -226,15 +231,15 @@ void get_etable_rows(string prefix, vector<char> ranks, vector<unsigned int> com
 		vector<unsigned int> remaining_combo (combination);
 		vector<char> current_ranks (ranks);
 		remaining_combo.at(i)--;
-		cout << " Prefix = " << prefix << endl << "  before: ";
-		for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
-		cout << endl;
+		//cout << " Prefix = " << prefix << endl << "  before: ";
+		//for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
+		//cout << endl;
 		for (j=i*u + prefix.length(); j<(i+1)*u; j++) {
 			current_ranks.at(j)++;
 		}
-		cout << "  after: ";
-		for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
-		cout << endl << endl;
+		//cout << "  after: ";
+		//for (j=0; j<current_ranks.size(); j++) printf("%02x ", current_ranks.at(j));
+		//cout << endl << endl;
 		get_etable_rows(next_prefix, current_ranks, remaining_combo, table);
 	}
 }
@@ -385,7 +390,7 @@ void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 		E_table* etable = E_table_ptrs.at(i);
 		total_g_table_depth += etable->entries.size();
 		print_int(ofs, total_g_table_depth, 32);
-		printf("^^^ E Table depth = %02x\n", total_g_table_depth);
+		//printf("^^^ E Table depth = %02x\n", total_g_table_depth);
 		//cout << "G table depth[" << i+1 << "] = " << total_g_table_depth << endl;
 	}
 
@@ -400,10 +405,10 @@ void NavarroSeq::print_E_table_info(std::ofstream & ofs) {
 				print_char(ofs, entry->sequence.at(k), 8);
 				//total_e_table_size += 8;
 			}
-			cout << "SEQUENCE " << entry->sequence << endl;
+			//cout << "SEQUENCE " << entry->sequence << endl;
 			for(unsigned int k=0; k<entry->ranks.size(); k++) {
 				  //ofs.put(entry->ranks.at(k)); // log u bits
-				printf("-->%02x\n",entry->ranks.at(k));
+			//	printf("-->%02x\n",entry->ranks.at(k));
 				print_char(ofs, entry->ranks.at(k), e_table_rank_size);
 				//total_e_table_size += e_table_rank_size;
 			}
@@ -427,6 +432,16 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 	BitPrinter l_printer(&ofs_l_vals);
 	BitPrinter n_printer(&ofs_n_vals);
 
+	unsigned int r_bits = 0;
+	unsigned int l_super_bits = 0;
+	unsigned int l_rel_bits = 0;
+	unsigned int i_bits = 0;
+	unsigned int n_super_bits = 0;
+	unsigned int n_rel_bits = 0;
+	unsigned int num_superblocks = 0;
+	unsigned int num_rel = 0;
+	unsigned long last_n = 0;
+
 	l_printer.print_int(0, full_l_int_size);
 	for (size_t i=0; i<r; i++) {
 		n_printer.print_int(0, full_l_int_size);
@@ -445,17 +460,22 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 		
 		r_printer.print_int(current_r, r_int_size);
 		i_printer.print_int(current_i, current_i_size);
+		r_bits += r_int_size;
+		i_bits += current_i_size;
 
 		/*
 		* L and N partial sums are a bit trickier.  If this sequence begins a new L and N 'superblock', we store the full partial sums.
 		* Otherwise, we store just the relative sum since the beginning of the current 'superblock'.
 		*/
 		if ((i+1) % large_block_size == 0) {
+			num_superblocks++;
 			current_l = (prev_l + current_i_size + last_full_l_sum);
 			l_printer.print_int(current_l, full_l_int_size);
+			l_super_bits += full_l_int_size;
 			for (size_t j=0; j<r; j++) {
 				current_n = last_full_n_sum.at(j) + prev_n.at(j) + curr_combination.at(j);
 				n_printer.print_int(current_n, full_l_int_size);
+				n_super_bits += full_l_int_size;
 				last_full_n_sum.at(j) = current_n;
 				prev_n.at(j) = 0;
 			}
@@ -463,16 +483,34 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 			last_full_l_sum = current_l;
 			prev_l = 0;
 		} else {
+			num_rel++;
 			current_l = (prev_l + current_i_size);
 			l_printer.print_int(current_l, relative_l_int_size);
+			l_rel_bits += relative_l_int_size;
 			for (size_t j=0; j<r; j++) {
 				current_n = prev_n.at(j) + curr_combination.at(j);
 				n_printer.print_int(current_n, relative_l_int_size);
+				last_n = last_n << relative_l_int_size;
+				last_n += current_n;
+				n_rel_bits += relative_l_int_size;
 				prev_n.at(j) = current_n;
 			}
 			
 			prev_l = current_l;
 		}
+	}
+
+	cout << " #### R = " << r_bits << " bits = " << ceil(r_bits/8.0) << " bytes." << endl;
+	cout << " #### I = " << i_bits << " bits = " << ceil(i_bits/8.0) << " bytes." << endl;
+	cout << " #### L super = " << l_super_bits << " bits = " << ceil(l_super_bits/8.0) << " bytes." << endl;
+	cout << " #### L rel = " << l_rel_bits << " bits = " << ceil(l_rel_bits/8.0) << " bytes." << endl;
+	cout << " #### N super = " << n_super_bits << " bits = " << ceil(n_super_bits/8.0) << " bytes." << endl;
+	cout << " #### N rel = " << n_rel_bits << " bits = " << ceil(n_rel_bits/8.0) << " bytes." << endl;
+	cout << " #### Superblocks = " << num_superblocks << endl;
+	cout << " #### Rel = " << num_rel << endl;
+	eight_byte_union.thelong = last_n;
+	for (int i=0; i<8; i++) {
+		printf(" --> %02x\n", eight_byte_union.byte[i]);
 	}
 
 	unsigned int rmdr_length = n%u;
@@ -515,25 +553,25 @@ void init(std::ifstream & ifs) {
 	}
 
 	//Calculate bit sizes of each compressed element:
-	/*
+	
 	cout << "*************" << endl;
 	cout << "n = " << n << endl;
 	cout << "r = " << r << endl;
 	cout << "u = " << u << endl;
 	cout << "number of blocks = " << num_blocks << endl;
 	cout << "number of combinations = " << combinations.size() << endl;
-	*/
+	
 
 	r_int_size = ceil(log2(combinations.size()));
 	large_block_size = ceil(log2(n*log2(r)));
 	full_l_int_size = ceil(log2(n*log2(r)));
 	relative_l_int_size = ceil(log2(u * ceil(log2(r)) * ceil(log2(n*log2(r)))));
 
-	/*
+	
 	cout << "Using " << r_int_size << " bits for each Ri." << endl;
 	cout << "Using blocks of " << large_block_size << " Lj and storing full partial sums for each." << endl;
 	cout << "Using " << full_l_int_size << " bits for each full and " << relative_l_int_size << " bits for each relative partial sum." << endl;
-	*/
+	
 }
 
 /**********************************************************************************************************************************
