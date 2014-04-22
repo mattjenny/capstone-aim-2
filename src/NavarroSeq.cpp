@@ -463,6 +463,11 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 		r_bits += r_int_size;
 		i_bits += current_i_size;
 
+		//if (i<10 || i>(num_blocks-12)) {
+		//	cout << "  R[" << i << "] = " << current_r << " with " << r_int_size << " bits." << endl;
+		//	cout << "  I[" << i << "] = " << current_i << " with " << current_i_size << " bits." << endl;
+		//}
+
 		/*
 		* L and N partial sums are a bit trickier.  If this sequence begins a new L and N 'superblock', we store the full partial sums.
 		* Otherwise, we store just the relative sum since the beginning of the current 'superblock'.
@@ -472,10 +477,12 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 			current_l = (prev_l + current_i_size + last_full_l_sum);
 			l_printer.print_int(current_l, full_l_int_size);
 			l_super_bits += full_l_int_size;
+			//if(i<10 || i>(num_blocks-12)) cout << "  L[" << i << "] = " << current_l << " with " << full_l_int_size << " bits." << endl;
 			for (size_t j=0; j<r; j++) {
 				current_n = last_full_n_sum.at(j) + prev_n.at(j) + curr_combination.at(j);
 				n_printer.print_int(current_n, full_l_int_size);
 				n_super_bits += full_l_int_size;
+				//if (i<3 || i>(num_blocks-4)) cout << "  N[" << i << "][" << j << "] = " << current_n << " with " << full_l_int_size << " bits." << endl;
 				last_full_n_sum.at(j) = current_n;
 				prev_n.at(j) = 0;
 			}
@@ -487,9 +494,11 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 			current_l = (prev_l + current_i_size);
 			l_printer.print_int(current_l, relative_l_int_size);
 			l_rel_bits += relative_l_int_size;
+			//if(i<10 || i>(num_blocks-12)) cout << "  L[" << i << "] = " << current_l << " with " << relative_l_int_size << " bits." << endl;
 			for (size_t j=0; j<r; j++) {
 				current_n = prev_n.at(j) + curr_combination.at(j);
 				n_printer.print_int(current_n, relative_l_int_size);
+				//if (i<3 || i>(num_blocks-4)) cout << "  N[" << i << "][" << j << "] = " << current_n << " with " << relative_l_int_size << " bits." << endl;
 				last_n = last_n << relative_l_int_size;
 				last_n += current_n;
 				n_rel_bits += relative_l_int_size;
@@ -499,7 +508,7 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 			prev_l = current_l;
 		}
 	}
-
+	/*
 	cout << " #### R = " << r_bits << " bits = " << ceil(r_bits/8.0) << " bytes." << endl;
 	cout << " #### I = " << i_bits << " bits = " << ceil(i_bits/8.0) << " bytes." << endl;
 	cout << " #### L super = " << l_super_bits << " bits = " << ceil(l_super_bits/8.0) << " bytes." << endl;
@@ -511,7 +520,7 @@ string NavarroSeq::parse_input_data(std::ifstream & ifs, string r_fname, string 
 	eight_byte_union.thelong = last_n;
 	for (int i=0; i<8; i++) {
 		printf(" --> %02x\n", eight_byte_union.byte[i]);
-	}
+	}*/
 
 	unsigned int rmdr_length = n%u;
 	char data[rmdr_length+1];
@@ -553,25 +562,25 @@ void init(std::ifstream & ifs) {
 	}
 
 	//Calculate bit sizes of each compressed element:
-	
+	/*
 	cout << "*************" << endl;
 	cout << "n = " << n << endl;
 	cout << "r = " << r << endl;
 	cout << "u = " << u << endl;
 	cout << "number of blocks = " << num_blocks << endl;
 	cout << "number of combinations = " << combinations.size() << endl;
-	
+	*/
 
 	r_int_size = ceil(log2(combinations.size()));
 	large_block_size = ceil(log2(n*log2(r)));
 	full_l_int_size = ceil(log2(n*log2(r)));
 	relative_l_int_size = ceil(log2(u * ceil(log2(r)) * ceil(log2(n*log2(r)))));
 
-	
+	/*
 	cout << "Using " << r_int_size << " bits for each Ri." << endl;
 	cout << "Using blocks of " << large_block_size << " Lj and storing full partial sums for each." << endl;
 	cout << "Using " << full_l_int_size << " bits for each full and " << relative_l_int_size << " bits for each relative partial sum." << endl;
-	
+	*/
 }
 
 /**********************************************************************************************************************************
@@ -612,10 +621,10 @@ void NavarroSeq::compress(string in_fname, string out_fname)
 	print_remainder(ofs);
 	ofs << rmdr;
 
-	remove("temp_r_file");
-	remove("temp_i_file");
-	remove("temp_l_file");
-	remove("temp_n_file");
+	//remove("temp_r_file");
+	//remove("temp_i_file");
+	//remove("temp_l_file");
+	//remove("temp_n_file");
 }
 
 string NavarroSeq::decompress(string filename)
