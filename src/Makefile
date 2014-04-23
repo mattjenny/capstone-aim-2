@@ -1,16 +1,16 @@
 CXX	= g++
+CFLAGS = -std=c++0x
+OBJS = BitPrinter.o BitReader.o NavarroSeq.o capstone_query.o
+PROG = CapstoneQuery
 .SUFFIXES: .o .cpp
 
-all: NavarroSeq
+all: $(PROG)
 
-BitPrinter.o: BitPrinter.cpp BitPrinter.h
-	$(CXX) -c BitPrinter.cpp
+.cpp.o:
+	$(CXX) $(CFLAGS) -c -o $@ $<
 
-BitReader.o: BitReader.cpp BitReader.h
-	$(CXX) -c BitReader.cpp
-
-NavarroSeq: NavarroSeq.cpp BitReader.o BitPrinter.o ETable.h
-	$(CXX) -o NavSeq BitReader.o BitPrinter.o NavarroSeq.cpp
+$(PROG): $(OBJS)
+	$(CXX) $(CFLAGS) -o $@ $(OBJS)
 
 clean:
 	/bin/rm -f *.o *~
