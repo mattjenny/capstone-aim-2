@@ -19,28 +19,76 @@ unsigned int get_size(string filename)
   return size;
 }
 
+vector<vector<unsigned int> > get_freq_file(string filename)
+{
+  ifstream file(filename);
+  if(!file)
+    cout << "Could not find " << filename << endl;
+
+  vector<vector<unsigned int> > frequencies;
+
+  for(int i = 0; i < 9; i++)
+    {
+      //First 3 correspond to zero, second 3 correspond to 1, third 3 correspond to 2
+      vector<unsigned int> values(20, 0);
+      frequencies.push_back(values);
+    }
+
+  string line;
+  int i = 0;
+  while(getline(file,line))
+    {
+      stringstream ss(line);
+
+      int j = 0;
+      string x, throwaway;
+      getline(ss, throwaway, ' ');
+      while(ss)
+	{
+	  if(j > 19)
+	    break;
+	  getline(ss, x, ' ');
+	  frequencies.at(i).at(j) = stoi(x);
+	  j++;
+	}
+      i++;
+    }
+
+  return frequencies;
+}
+
 vector<vector<unsigned int> > get_frequencies(string filename)
 {
   ifstream file(filename);
   if(!file)
-    {
-      cout << "Could not find file." << endl;
-    }
+      cout << "Could not find " << filename << endl;
+
+  string frequencies_out = "frequencies.txt";
+  ofstream ofs(frequencies_out);
 
   vector<vector<unsigned int> > frequencies;
   
 for(int i = 0; i < 9; i++)
     {
       //First 3 correspond to zero, second 3 correspond to 1, third 3 correspond to 2
-      vector<unsigned int> values;
+      vector<unsigned int> values(20, 0);
       frequencies.push_back(values);
     }
 
   char last = 'A';
   char current;
   string window;
+  cout << "file size: " << get_size(filename) << endl;
 
-  for(unsigned int i = 0; i < get_size(filename); i++)
+  int max = get_size(filename);
+  //set bounds on filesize if needed
+  /*int max = 1000000;
+  if(get_size(filename)<max)
+  max = get_size(filename);*/
+  int div = max/100;
+  int count = div;
+
+  for(unsigned int i = 0; i < max; i++)
     {
       current = file.get();
       //for test data
@@ -50,117 +98,127 @@ for(int i = 0; i < 9; i++)
 	  current = file.get();
 	}
 
-      if(i == get_size(filename))
+      if(i == max)
 	break;
 
       //cout << current;
-      if(current == '0' && (last == '1' || last == '2'))
+      
+      if(i > count)
 	{
-	  if(last == '1')
-	    {
-	      while(frequencies.at(3).size() <= window.size()+1)
-	       {
-		 frequencies.at(3).push_back(0);
-	       }
-	      frequencies.at(3).at(window.size())++;
-	    } 
-	  else if(last == '2')
-	    {
-	      while(frequencies.at(6).size() <= window.size()+1)
-		{
-		  frequencies.at(6).push_back(0);
-		}	 
-	      frequencies.at(6).at(window.size())++;
-	    }
-	  window.clear();
+	  cout << count << endl;
+	  count = count+div;
 	}
-      else if((current == '1' || current == '2') && last == '0')
-	{
-	  if(current == '1')
-	    {
-	    while(frequencies.at(1).size() <= window.size()+1)
-		{
-		  frequencies.at(1).push_back(0);
-		}	 
-	      frequencies.at(1).at(window.size())++;
-	    }
-	  else if(current == '2')
-	    {
-	      while(frequencies.at(2).size() <= window.size()+1)
-		{
-		  frequencies.at(2).push_back(0);
-		}	 
-	      frequencies.at(2).at(window.size())++;
-	    }
-	  window.clear();
-	}
-
-      //add current element to window
-      window.append(1,current);
-
       //check to see if it's 0*
       if(regex_match(window, zero))
 	{
 	  if(current == '0')
 	    {
-	      while(frequencies.at(0).size() <= window.size())
-		{
-		  frequencies.at(0).push_back(0);
-		}	 
-	      frequencies.at(0).at(window.size()-1)++;
+	      int index = window.size();
+	      if(index>19)
+		index = 19;
+	      frequencies.at(0).at(index)++;
 	    }
-	  else
-	    { cout << "error!" << endl; }
+	  else if(current == '1')
+	    {
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(1).at(index)++;
+	    }
+	  else if(current == '2')
+	    {
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(2).at(index)++;
+	    }
 	}
 
       //check to see if it's {1,2}*1
       else if(regex_match(window, one))
 	{
-	  if(current == '1')
+	  if(current == '0')
 	    {
-	      while(frequencies.at(4).size() <= window.size())
-		{
-		  frequencies.at(4).push_back(0);
-		}	 
-	      frequencies.at(4).at(window.size()-1)++;
+	      int index = window.size();
+	      if(index>19)
+		index = 19;
+	      frequencies.at(3).at(index)++;
+	    } 
+	  else if(current == '1')
+	    {
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(4).at(index)++;
 	    }
 	  else if(current == '2')
 	    {
-	      //actually unused
-	      while(frequencies.at(5).size() <= window.size())
-		{
-		  frequencies.at(5).push_back(0);
-		}	 
-	      frequencies.at(5).at(window.size()-1)++;
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(5).at(index)++;
 	    }
 	}
 
       //check to see if it's {1,2}*2
       else if(regex_match(window, two))
 	{
-	  if(current == '1')
+	  if(current == '0')
 	    {
-	      //actually unused
-	      while(frequencies.at(7).size() <= window.size())
-		{
-		  frequencies.at(7).push_back(0);
-		}	 
-	      frequencies.at(7).at(window.size()-1)++;
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(6).at(index)++;
+	    }
+	  else if(current == '1')
+	    {
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(7).at(index)++;
 	    }
 	  else if(current == '2')
 	    {
-	      while(frequencies.at(8).size() <= window.size())
-		{
-		  frequencies.at(8).push_back(0);
-		}	 
-	      frequencies.at(8).at(window.size()-1)++;
+	      int index = window.size();
+	      if(index>19)
+		index = 19;	 
+	      frequencies.at(8).at(index)++;
 	    }
 	}
       else
 	cout << "error: " << window << endl;
+
+      //check for window change
+      if(current == '0' && (last == '1' || last == '2'))
+	{
+	  window.clear();
+	}
+
+      if((current == '1' || current == '2') && last == '0')
+	{
+	  window.clear();
+	}
+
+      if(window.size() > 19)
+	window.clear();
+
+      //add current element to window
+      window.append(1,current);
+
       last = current;
     }
   //cout << endl;
+
+  for(int i = 0; i < frequencies.size(); i++)
+    {
+      ofs << i << ": ";
+      for(int j = 0; j < frequencies.at(i).size(); j++)
+	{
+	  ofs << frequencies.at(i).at(j) << " ";
+	}
+      ofs << endl;
+    }
+
   return frequencies;
 }
 
@@ -183,6 +241,8 @@ void generate_data(string outfile, unsigned int size, vector<vector<unsigned int
       if(regex_match(window, zero))
 	{
 	  int depth = window.size();
+	  if(depth > 19)
+	    depth = 19;
 	  int tempZero, tempOne, tempTwo;
 	  if(depth < frequencies.at(0).size())
 	    tempZero = frequencies.at(0).at(depth);
@@ -211,31 +271,27 @@ void generate_data(string outfile, unsigned int size, vector<vector<unsigned int
 	    c = '2';
 	  ofs.put(c);
 	}
-      else if(regex_match(window, one) || regex_match(window, two))
+      else if(regex_match(window, one))
 	{
 	  int depth = window.size();
-	  int temp1Zero, temp2Zero, tempOne, tempTwo;
+	  if(depth > 19)
+	    depth = 19;
+	  int tempZero, tempOne, tempTwo;
 	  if(depth < frequencies.at(3).size())
-	    temp1Zero = frequencies.at(3).at(depth);
+	    tempZero = frequencies.at(3).at(depth);
 	  else
-	    temp1Zero = frequencies.at(3).at(frequencies.at(3).size()-1);
+	    tempZero = frequencies.at(3).at(frequencies.at(3).size()-1);
 
 	  if(depth < frequencies.at(4).size())
 	    tempOne = frequencies.at(4).at(depth);
 	  else
 	    tempOne = frequencies.at(4).at(frequencies.at(4).size()-1);
 
-	  if(depth < frequencies.at(6).size())
-	    temp2Zero = frequencies.at(6).at(depth);
+	  if(depth < frequencies.at(5).size())
+	    tempTwo = frequencies.at(5).at(depth);
 	  else
-	    temp2Zero = frequencies.at(6).at(frequencies.at(6).size()-1);
+	    tempTwo = frequencies.at(5).at(frequencies.at(5).size()-1);
 
-	  if(depth < frequencies.at(8).size())
-	    tempTwo = frequencies.at(8).at(depth);
-	  else
-	    tempTwo = frequencies.at(8).at(frequencies.at(8).size()-1);
-
-	  int tempZero = tempOne + tempTwo;
 	  int total = tempZero + tempOne + tempTwo;
 
 	  float rand = distribution(generator)*total;
@@ -248,6 +304,40 @@ void generate_data(string outfile, unsigned int size, vector<vector<unsigned int
 	    c = '2';
 	  ofs.put(c);
 	}
+      else if(regex_match(window, two))
+	{
+	  int depth = window.size();
+	  if(depth > 19)
+	    depth = 19;
+	  int tempZero, tempOne, tempTwo;
+	  if(depth < frequencies.at(6).size())
+	    tempZero = frequencies.at(6).at(depth);
+	  else
+	    tempZero = frequencies.at(6).at(frequencies.at(6).size()-1);
+
+	  if(depth < frequencies.at(7).size())
+	    tempOne = frequencies.at(7).at(depth);
+	  else
+	    tempOne = frequencies.at(7).at(frequencies.at(7).size()-1);
+
+	  if(depth < frequencies.at(8).size())
+	    tempTwo = frequencies.at(8).at(depth);
+	  else
+	    tempTwo = frequencies.at(8).at(frequencies.at(8).size()-1);
+
+	  int total = tempZero + tempOne + tempTwo;
+
+	  float rand = distribution(generator)*total;
+	  int value = rand;
+	  if(value < tempZero)
+	    c = '0';
+	  if(value < (tempZero+tempOne) && value > tempZero)
+	    c = '1';
+	  if(value <= total && value > (tempZero+tempOne))
+	    c = '2';
+	  ofs.put(c);
+	}
+
       if(window.size() > 0)
 	{
 	  if(window.at(window.size()-1) == '0' && c != '0')
@@ -255,9 +345,13 @@ void generate_data(string outfile, unsigned int size, vector<vector<unsigned int
 	  else if(window.at(window.size()-1) != '0' && c == '0')
 	    window.clear();
 	}
+
+      if(window.size() > 19)
+	window.clear();
+
       window.append(1,c);
     }
-    /*
+  /*    
   //Testing purposes
     for(int i = 0; i < frequencies.size(); i++)
     {
@@ -268,34 +362,192 @@ void generate_data(string outfile, unsigned int size, vector<vector<unsigned int
 	}
       cout << endl;
     }
-*/
+  */
+}
+
+void generate_horizontal_data(string outfile, unsigned int size, unsigned int fileNum, vector<vector<unsigned int> > frequencies)
+{
+  ofstream ofs(outfile);
+  //start with 0 to start, for simplification
+  ofs.put(0);
+
+  //string window;
+  vector<string> window(fileNum, "");
+  char c;
+
+  for(int k = 0; k < fileNum; k++)
+    window.at(k).append(1,'0');
+
+  random_device rdev{};
+  default_random_engine generator{rdev()};
+  uniform_real_distribution<float> distribution(0.0, 1.0);
+
+  for(int f = 0; f < fileNum; f++)
+    {
+      for(int i = 0; i < size; i++)
+	{
+	  if(regex_match(window.at(f), zero))
+	    {
+	      int depth = window.at(f).size();
+	      if(depth > 19)
+		depth = 19;
+	      int tempZero, tempOne, tempTwo;
+	      if(depth < frequencies.at(0).size())
+		tempZero = frequencies.at(0).at(depth);
+	      else
+		tempZero = frequencies.at(0).at(frequencies.at(0).size()-1);
+	      
+	      if(depth < frequencies.at(1).size())
+		tempOne = frequencies.at(1).at(depth);
+	      else
+		tempOne = frequencies.at(1).at(frequencies.at(1).size()-1);
+
+	      if(depth < frequencies.at(2).size())
+		tempTwo = frequencies.at(2).at(depth);
+	      else
+		tempTwo = frequencies.at(2).at(frequencies.at(2).size()-1);
+
+	      int total = tempZero + tempOne + tempTwo;
+
+	      float rand = distribution(generator)*total;
+	      int value = rand;
+	      if(value < tempZero)
+		c = '0';
+	      if(value < (tempZero+tempOne) && value > tempZero)
+		c = '1';
+	      if(value <= total && value > (tempZero+tempOne))
+		c = '2';
+	      ofs.put(c);
+	    }
+	  else if(regex_match(window.at(f), one))
+	    {
+	      int depth = window.at(f).size();
+	      if(depth > 19)
+		depth = 19;
+	      int tempZero, tempOne, tempTwo;
+	      if(depth < frequencies.at(3).size())
+		tempZero = frequencies.at(3).at(depth);
+	      else
+		tempZero = frequencies.at(3).at(frequencies.at(3).size()-1);
+
+	      if(depth < frequencies.at(4).size())
+		tempOne = frequencies.at(4).at(depth);
+	      else
+		tempOne = frequencies.at(4).at(frequencies.at(4).size()-1);
+
+	      if(depth < frequencies.at(5).size())
+		tempTwo = frequencies.at(5).at(depth);
+	      else
+		tempTwo = frequencies.at(5).at(frequencies.at(5).size()-1);
+
+	      int total = tempZero + tempOne + tempTwo;
+
+	      float rand = distribution(generator)*total;
+	      int value = rand;
+	      if(value < tempZero)
+		c = '0';
+	      if(value < (tempZero+tempOne) && value > tempZero)
+		c = '1';
+	      if(value <= total && value > (tempZero+tempOne))
+		c = '2';
+	      ofs.put(c);
+	    }
+	  else if(regex_match(window.at(f), two))
+	    {
+	      int depth = window.at(f).size();
+	      if(depth > 19)
+		depth = 19;
+	      int tempZero, tempOne, tempTwo;
+	      if(depth < frequencies.at(6).size())
+		tempZero = frequencies.at(6).at(depth);
+	      else
+		tempZero = frequencies.at(6).at(frequencies.at(6).size()-1);
+
+	      if(depth < frequencies.at(7).size())
+		tempOne = frequencies.at(7).at(depth);
+	      else
+		tempOne = frequencies.at(7).at(frequencies.at(7).size()-1);
+
+	      if(depth < frequencies.at(8).size())
+		tempTwo = frequencies.at(8).at(depth);
+	      else
+		tempTwo = frequencies.at(8).at(frequencies.at(8).size()-1);
+
+	      int total = tempZero + tempOne + tempTwo;
+
+	      float rand = distribution(generator)*total;
+	      int value = rand;
+	      if(value < tempZero)
+		c = '0';
+	      if(value < (tempZero+tempOne) && value > tempZero)
+		c = '1';
+	      if(value <= total && value > (tempZero+tempOne))
+		c = '2';
+	      ofs.put(c);
+	    }
+
+	  if(window.at(f).size() > 0)
+	    {
+	      if(window.at(f).at(window.at(f).size()-1) == '0' && c != '0')
+		window.at(f).clear();
+	      else if(window.at(f).at(window.at(f).size()-1) != '0' && c == '0')
+		window.at(f).clear();
+	    }
+
+	  if(window.at(f).size() > 19)
+	    window.at(f).clear();
+
+	  window.at(f).append(1,c);
+	}
+    }
 }
 
 int main(int argc, char** argv)
 {
-  if(argc < 2)
+  if(argc < 4)
     {
       cout << "Usage: " << argv[0] << "inputfilename sizefile numbertestfiles" << endl;
+      cout << "Or use -f flag to use frequencies.txt (in place of inputfilename)" << endl;
       return 0;
     }
+
+  bool flag = false;
 
   string filename = argv[1];
   unsigned int size = atoi(argv[2]);
   unsigned int fileNum = atoi(argv[3]);
 
-  /* Playing around with regex
-  string s = "11112";
-  if(regex_match(s,zero))
-    cout << "0" << endl; 
-  else if(regex_match(s,one))
-	  cout << "1" << endl;
-  else if(regex_match(s,two))
-  cout << "2" << endl; */
-  cout << "Getting info..." << endl;
-  vector<vector<unsigned int> > freq =  get_frequencies(filename);
-  cout << "Generating test data..." << endl;
-  generate_data("outtest.txt", size, freq);
+  if(strcmp("-f", argv[1]) == 0)
+    flag = true;
 
+  cout << "Getting info..." << endl;
+  vector<vector<unsigned int> > freq;
+
+  if(flag)
+    freq = get_freq_file("frequencies.txt");
+  else
+    freq = get_frequencies(filename);
+
+  cout << "Generating test data..." << endl;
+ 
+  //Single generated file
+
+  string outfile = "testData.txt";
+  generate_horizontal_data(outfile, size, fileNum, freq);
+
+  /*
+  //Separate generated files
+  string outfileName = "testData";
+  string outfileExtension = ".txt";
+  for(int i = 1; i <= fileNum; i++)
+    {
+      stringstream ss;
+      ss << i;
+      string num = ss.str();
+      string outfile = outfileName + num + outfileExtension;
+      generate_data(outfile, size, freq);
+    }
+  */
   /* Testing
   ifstream ifs("outtest.txt");
   while(ifs.good())
@@ -305,4 +557,13 @@ int main(int argc, char** argv)
 	cout << x;
     }
   */
+
+  /* Playing around with regex
+  string s = "11112";
+  if(regex_match(s,zero))
+    cout << "0" << endl; 
+  else if(regex_match(s,one))
+	  cout << "1" << endl;
+  else if(regex_match(s,two))
+  cout << "2" << endl; */
 }
