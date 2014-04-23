@@ -824,7 +824,7 @@ unsigned int NavarroSeq::get_size(string fname) {
 	std::ifstream ifs (fname, std::ifstream::in);
 	return get_int(ifs, 32);
 }
-
+/*
 int main(int argc, char** argv) {
 
 	bool compress = false;
@@ -869,7 +869,7 @@ int main(int argc, char** argv) {
 	} else if (rank) {
 		cout << NavarroSeq::rank(fileIn, index, c) << endl;
 	}
-/*
+
 	unsigned int testint = 42;
 	std::ofstream ofs("test-byte-compression.txt");
 	print_char_with_num_bits(ofs, 0x03, 2);
@@ -880,9 +880,7 @@ int main(int argc, char** argv) {
 	print_with_num_bits(ofs, testint, 7);
 	print_with_num_bits(ofs, 0x1abbccdd, 29);
 	print_remainder(ofs);
-*/
 
-/*
 	std::ifstream ifs ("test-byte-compression.txt", std::ifstream::in);
 	get_char_with_num_bits(ifs, 2);
 	get_char_with_num_bits(ifs, 2);
@@ -891,10 +889,10 @@ int main(int argc, char** argv) {
 	get_int_with_num_bits(ifs, 32);
 	get_int_with_num_bits(ifs, 7);
 	get_int_with_num_bits(ifs, 29);
-*/
+
 
 	return 0;
-}
+}*/
 
 /*int main() {
 	// test sequence

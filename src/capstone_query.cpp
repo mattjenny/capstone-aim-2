@@ -112,7 +112,7 @@ int main(int argc, char** argv)
       cout << "@author Matt Jenny (mvj5fs)" << endl << endl;
       cout << "Usage: " << endl;
       cout << "       For query 1: " << argv[0] << " $(FLAG) [your_file_name] [variant_index] [population_size]" << endl;
-      cout << "       For query 2: " << argv[0] << " $(FLAG) [your_file_name] [variant_count] [population_size]" << endl << endl;
+      cout << "       For query 2: " << argv[0] << " $(FLAG) [your_file_name] [variant_count] [population_size] [frequency cutoff]" << endl << endl;
       cout << "Flags: " << endl;
       cout << "       -c1 : Compression-aware algorithm for query 1" << endl;
       cout << "       -u1 : Uncompressed algorithm for query 1" << endl;
