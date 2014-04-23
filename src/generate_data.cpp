@@ -504,7 +504,7 @@ void generate_horizontal_data(string outfile, unsigned int size, unsigned int fi
 
 int main(int argc, char** argv)
 {
-  if(argc < 4)
+  if(argc < 5)
     {
       cout << "Usage: " << argv[0] << "inputfilename sizefile numbertestfiles" << endl;
       cout << "Or use -f flag to use frequencies.txt (in place of inputfilename)" << endl;
@@ -520,7 +520,7 @@ int main(int argc, char** argv)
   if(strcmp("-f", argv[1]) == 0)
     flag = true;
 
-  cout << "Getting info..." << endl;
+  //cout << "Getting info..." << endl;
   vector<vector<unsigned int> > freq;
 
   if(flag)
@@ -528,11 +528,11 @@ int main(int argc, char** argv)
   else
     freq = get_frequencies(filename);
 
-  cout << "Generating test data..." << endl;
+  //cout << "Generating test data..." << endl;
  
   //Single generated file
 
-  string outfile = "testData.txt";
+  string outfile = argv[4];
   generate_horizontal_data(outfile, size, fileNum, freq);
 
   /*
